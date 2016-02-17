@@ -1612,6 +1612,8 @@ rtrequest1_fib(int req, struct rt_addrinfo *info, struct rtentry **ret_nrt,
 
 		RIB_WLOCK(rnh);
 		rt = rt_unlinkrte(rnh, info, &error);
+		if (fibnum == 0 && rt != NULL)
+			dxr_request(rt,RTM_DELETE);
 		RIB_WUNLOCK(rnh);
 		if (error != 0)
 			return (error);
@@ -1777,6 +1779,11 @@ rtrequest1_fib(int req, struct rt_addrinfo *info, struct rtentry **ret_nrt,
 		}
 		rnh->rnh_gen++;		/* Routing table updated */
 		RT_UNLOCK(rt);
+		if (fibnum == 0) {
+			RADIX_NODE_HEAD_LOCK(rnh);
+			dxr_request(rt,req);
+			RADIX_NODE_HEAD_UNLOCK(rnh);
+		}
 		break;
 	case RTM_CHANGE:
 		RIB_WLOCK(rnh);
