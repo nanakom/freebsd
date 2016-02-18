@@ -72,6 +72,7 @@ __FBSDID("$FreeBSD$");
 #include <netinet/ip.h>
 #include <netinet/in_pcb.h>
 #include <netinet/ip_var.h>
+#include <netinet/ip_fib.h>
 #include <netinet/ip_fw.h>
 #include <netinet/ip_icmp.h>
 #include <netinet/ip_options.h>
@@ -554,19 +555,28 @@ tooshort:
 #ifdef IPSEC
 	/* For now we do not handle IPSEC in tryforward. */
 	if (!key_havesp(IPSEC_DIR_INBOUND) && !key_havesp(IPSEC_DIR_OUTBOUND) &&
-	    (V_ipforwarding == 1))
-		if (ip_tryforward(m) == NULL)
+	    (V_ipforwarding == 1)) {
+		if (dxr_input(m) == NULL)
 			return;
+	}
 	/*
 	 * Bypass packet filtering for packets previously handled by IPsec.
 	 */
 	if (ip_ipsec_filtertunnel(m))
 		goto passin;
 #else
-	if (V_ipforwarding == 1)
-		if (ip_tryforward(m) == NULL)
+	if (V_ipforwarding == 1) {
+		if (dxr_input(m) == NULL)
 			return;
+	}
 #endif /* IPSEC */
+	if (m->m_flags & M_VALE) {
+		/* dxr_input didn't get fastpath */
+		m->m_pkthdr.PH_loc.ptr = NULL;
+		printf("%s m:0x%p ifp:%s dxr_input has not found a route, 
+			returning\n", __FUNCTION__, m, ifp->if_xname);
+		return;
+	}
 
 	/*
 	 * Run through list of hooks for input packets.
