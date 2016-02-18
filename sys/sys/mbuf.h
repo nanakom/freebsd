@@ -265,6 +265,7 @@ struct mbuf {
 #define	M_VLANTAG	0x00000080 /* ether_vtag is valid */
 #define	M_UNUSED_8	0x00000100 /* --available-- */
 #define	M_NOFREE	0x00000200 /* do not free mbuf, embedded in cluster */
+#define	M_VALE		0x00000400 /* send/received through VALE */
 
 #define	M_PROTO1	0x00001000 /* protocol-specific */
 #define	M_PROTO2	0x00002000 /* protocol-specific */
