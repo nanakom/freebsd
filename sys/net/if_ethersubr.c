@@ -452,6 +452,15 @@ ether_output_frame(struct ifnet *ifp, struct mbuf *m)
 			return (0);
 	}
 
+	if ((m->m_flags & M_VALE) != 0) {
+		if (ifp != (struct ifnet *)m->m_pkthdr.PH_loc.ptr) {
+			printf("%s somebody rewrote loc.ptr?, m: 0x%p ifp %p %s
+				loc.ptr %p..\n", __FUNCTION__, m, 
+				ifp, ifp->if_xname, m->m_pkthdr.PH_loc.ptr);
+			}
+		return 0;
+	}
+
 	/*
 	 * Queue message on interface, update output statistics if
 	 * successful, and start output if interface not yet active.
@@ -470,6 +479,11 @@ ether_input_internal(struct ifnet *ifp, struct mbuf *m)
 	u_short etype;
 
 	if ((ifp->if_flags & IFF_UP) == 0) {
+		if (m->m_flags & M_VALE) {
+			printf("%s Oops %s is down!\n", __FUNCTION__, 
+				ifp->if_xname);
+			return;
+		}
 		m_freem(m);
 		return;
 	}
