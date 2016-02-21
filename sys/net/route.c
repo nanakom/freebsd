@@ -66,6 +66,7 @@
 #endif
 
 #include <netinet/in.h>
+#include <netinet/ip_fib.h>
 #include <netinet/ip_mroute.h>
 
 #include <vm/uma.h>
