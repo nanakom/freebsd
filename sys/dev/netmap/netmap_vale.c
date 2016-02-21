@@ -1229,8 +1229,7 @@ netmap_dxr_lookup(struct nm_bdg_fwd *ft, uint8_t *dst_ring,
 	ND("if_input() done (m:0x%p et 0x%x dst_ifp 0x%p)", m, 
 			ntohs(eh->ether_type), dst_ifp);
 	if (!dst_ifp) {
-		D("lookup for %p from %s failed, freeing mbuf and returning", 
-				m, ifp->if_xname);
+		D("lookup for %p from %s failed, freeing mbuf and returning", m, ifp->if_xname);
 		//m->m_flags &= ~M_NOFREE;
 		m_free(m);
 		return NM_BDG_NOPORT;
@@ -1240,13 +1239,11 @@ netmap_dxr_lookup(struct nm_bdg_fwd *ft, uint8_t *dst_ring,
 		m_free(m);
 		return NM_BDG_NOPORT;
 	} else if (netmap_ifp_to_vp(dst_ifp) == NULL) {
-		D("dst_ifp %s is not attached to any VALE switch, dropping", 
-				dst_ifp->if_xname);
+		D("dst_ifp %s is not attached to any VALE switch, dropping", dst_ifp->if_xname);
 		m_free(m);
 		return NM_BDG_NOPORT;
 	} else if (netmap_ifp_to_vp(dst_ifp)->na_bdg != na->na_bdg) {
-		D("dst_ifp %s is not attached to the same VALE switch, 
-				dropping", dst_ifp->if_xname);
+		D("dst_ifp %s is not attached to the same VALE switch, dropping", dst_ifp->if_xname);
 		m_free(m);
 		return NM_BDG_NOPORT;
 	}
