@@ -573,8 +573,7 @@ tooshort:
 	if (m->m_flags & M_VALE) {
 		/* dxr_input didn't get fastpath */
 		m->m_pkthdr.PH_loc.ptr = NULL;
-		printf("%s m:0x%p ifp:%s dxr_input has not found a route, 
-			returning\n", __FUNCTION__, m, ifp->if_xname);
+		printf("%s m:0x%p ifp:%s dxr_input has not found a route, returning\n", __FUNCTION__, m, ifp->if_xname);
 		return;
 	}
 
