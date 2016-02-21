@@ -454,10 +454,8 @@ ether_output_frame(struct ifnet *ifp, struct mbuf *m)
 
 	if ((m->m_flags & M_VALE) != 0) {
 		if (ifp != (struct ifnet *)m->m_pkthdr.PH_loc.ptr) {
-			printf("%s somebody rewrote loc.ptr?, m: 0x%p ifp %p %s
-				loc.ptr %p..\n", __FUNCTION__, m, 
-				ifp, ifp->if_xname, m->m_pkthdr.PH_loc.ptr);
-			}
+			printf("%s somebody rewrote loc.ptr?, m: 0x%p ifp %p %s loc.ptr %p..\n", __FUNCTION__, m, ifp, ifp->if_xname, m->m_pkthdr.PH_loc.ptr);
+		}
 		return 0;
 	}
 
