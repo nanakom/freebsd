@@ -455,16 +455,22 @@ rtalloc1_fib(struct sockaddr *dst, int report, u_long ignflags,
 	/*
 	 * Look up the address in the table for that Address Family
 	 */
-	RIB_RLOCK(rh);
+	/* XXX dxr_initheap() followed by rtalloc_ign() has locked
+	 * the radix node head. Although we can see this in
+	 * ignflags & RTF_RNH_LOCKED, we would handle better...
+	 */
+	if (!(ignflags & RTF_RNH_LOCKED))
+		RIB_RLOCK(rh);
 	rn = rh->rnh_matchaddr(dst, &rh->head);
 	if (rn && ((rn->rn_flags & RNF_ROOT) == 0)) {
 		newrt = RNTORT(rn);
 		RT_LOCK(newrt);
 		RT_ADDREF(newrt);
-		RIB_RUNLOCK(rh);
+		if (!(ignflags & RTF_RNH_LOCKED))
+			RIB_RUNLOCK(rh);
 		return (newrt);
 
-	} else
+	} else if (!(ignflags & RTF_RNH_LOCKED))
 		RIB_RUNLOCK(rh);
 	
 	/*
