@@ -41,7 +41,7 @@
 		microtime(&__xxts);				\
 		printf("%03d.%06d [%4d] %-25s " format "\n",	\
 		(int)__xxts.tv_sec % 1000, (int)__xxts.tv_usec,	\
-		__LINE__, __FUNCTION__, ##__VA_ARGS__);		\
+		__LINE__, __func__, ##__VA_ARGS__);		\
 	} while (0)
 
 /* rate limited, lps indicates how many per second */
@@ -353,6 +353,7 @@ dxr_output(struct mbuf *m, struct dxr_nexthop *nh)
 	if ((m->m_flags & M_VALE) != 0) {
 		/* save lookup-ed destination */
 		m->m_pkthdr.PH_loc.ptr = dst_ifp;
+		return;
 	}
 
 	/*
@@ -951,7 +952,7 @@ chunk_ref(int chunk)
 			/* Alloc a new (empty) descriptor */
 			empty_cdp = uma_zalloc(chunk_zone, M_NOWAIT);
 			if (empty_cdp == NULL)
-				panic("%s %d\n", __FUNCTION__, __LINE__);
+				panic("%s %d\n", __func__, __LINE__);
 			empty_cdp->cd_max_size = cdp->cd_max_size - size;
 			empty_cdp->cd_base = cdp->cd_base + size;
 			empty_cdp->cd_chunk_first = -1;
@@ -965,7 +966,7 @@ chunk_ref(int chunk)
 		/* Alloc a new descriptor */
 		cdp = uma_zalloc(chunk_zone, M_NOWAIT);
 		if (cdp == NULL)
-			panic("%s %d\n", __FUNCTION__, __LINE__);
+			panic("%s %d\n", __func__, __LINE__);
 		cdp->cd_max_size = size;
 		cdp->cd_base = fdesc->base;
 		LIST_INSERT_HEAD(&all_chunks, cdp, cd_all_le);

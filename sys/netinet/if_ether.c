@@ -667,10 +667,6 @@ arpintr(struct mbuf *m)
 		}
 		ar = mtod(m, struct arphdr *);
 	}
-	if ((m->m_flags & M_VALE) != 0) {
-		printf("here is arpintr\n");
-		return;
-	}
 
 	hlen = 0;
 	layer = "";
