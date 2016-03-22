@@ -2889,6 +2889,9 @@ netmap_transmit(struct ifnet *ifp, struct mbuf *m)
 	struct mbq *q;
 	int space;
 
+	if (NA(m->m_pkthdr.rcvif)->na_private) {
+		panic("packet from vale port %s", m->m_pkthdr.rcvif->if_xname);
+	}
 	kring = &na->rx_rings[na->num_rx_rings];
 	// XXX [Linux] we do not need this lock
 	// if we follow the down/configure/up protocol -gl

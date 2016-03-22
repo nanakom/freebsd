@@ -1189,6 +1189,7 @@ netmap_dxr_lookup(struct nm_bdg_fwd *ft, uint8_t *dst_ring,
 	struct ifnet *dst_ifp, *ifp = netmap_vp_to_ifp(na);
 	struct ether_header *eh;
 	struct mbuf dm;
+	u_int ret = NM_BDG_NOPORT;
 	
 	/* safety check, unfortunately we have many cases */
 	if (buf_len >= 14 + na->virt_hdr_len) {
@@ -1205,13 +1206,11 @@ netmap_dxr_lookup(struct nm_bdg_fwd *ft, uint8_t *dst_ring,
 		return NM_BDG_NOPORT;
 	}
 	eh = (struct ether_header *)buf;
-	if (ntohs(eh->ether_type) != ETHERTYPE_IP) {
-		D("inoring non ethernet packet (0x%x)", ntohs(eh->ether_type));
+	if (ntohs(eh->ether_type) != ETHERTYPE_IP)
 		return NM_BDG_NOPORT;
-	}
 	/* create mbuf and set VALE flag */
 	bzero(&dm, sizeof(dm));
-	dm.m_flags |= M_VALE;
+	dm.m_flags |= (M_VALE | M_PKTHDR);
 	dm.m_pkthdr.rcvif = ifp;
 	dm.m_data = buf;
 	dm.m_len = dm.m_pkthdr.len = buf_len;
@@ -1221,47 +1220,30 @@ netmap_dxr_lookup(struct nm_bdg_fwd *ft, uint8_t *dst_ring,
 	ND("created mbuf 0x%p", m);
 	m->m_flags |= M_VALE;
 	//m->m_flags |= M_NOFREE;
-	/* call if_input(ether_input) */
 #endif /* 0 */
 	ifp->if_input(ifp, m);
 	/* mbuf might not be consumed */
 	dst_ifp = (struct ifnet *)m->m_pkthdr.PH_loc.ptr;
-	ND("if_input() done (m:0x%p et 0x%x dst_ifp 0x%p)", m, 
-			ntohs(eh->ether_type), dst_ifp);
 	if (!dst_ifp) {
-		D("lookup for %p from %s failed, freeing mbuf and returning", m, ifp->if_xname);
-		//m->m_flags &= ~M_NOFREE;
-		m_free(m);
-		return NM_BDG_NOPORT;
-	} else if (!(dst_ifp->if_capenable & IFCAP_NETMAP 
-				/* XXX do better way */)) {
-		D("dst_ifp %s is not netmap mode, dropping", dst_ifp->if_xname);
-		m_free(m);
-		return NM_BDG_NOPORT;
+		RD(1, "lookup %p (%s) failed", m, ifp->if_xname);
+	} else if (!(dst_ifp->if_capenable & IFCAP_NETMAP /* XXX */)) {
+		RD(1, "dst_ifp %s is not netmap mode", dst_ifp->if_xname);
 	} else if (netmap_ifp_to_vp(dst_ifp) == NULL) {
-		D("dst_ifp %s is not attached to any VALE switch, dropping", dst_ifp->if_xname);
-		m_free(m);
-		return NM_BDG_NOPORT;
+		RD(1, "dst_ifp %s is not on a VALE switch", dst_ifp->if_xname);
 	} else if (netmap_ifp_to_vp(dst_ifp)->na_bdg != na->na_bdg) {
-		D("dst_ifp %s is not attached to the same VALE switch, dropping", dst_ifp->if_xname);
-		m_free(m);
-		return NM_BDG_NOPORT;
+		RD(1, "dst_ifp %s is on different switch", dst_ifp->if_xname);
+	} else {
+		if (unlikely((uint8_t *)m->m_data != buf)) {
+			RD(1, "m_data differs from buf by %d",
+				(int)((uint8_t *)m->m_data - buf));
+			m_copydata(m, 0, MBUF_LEN(m), buf);
+		}
+		ret = netmap_bdg_idx(netmap_ifp_to_vp(dst_ifp));
 	}
-	if ((uint8_t *)m->m_data != buf) {
-		RD(1, "m_data 0x%p differs from buf 0x%p, copying...",
-			m->m_data, buf);
-		m_copydata(m, 0, MBUF_LEN(m), buf);
-	}
-	ND("returning: dst_ifp %p %s bdg port %u\n",
-		dst_ifp, dst_ifp?dst_ifp->if_xname:"NULL",
-		dst_ifp ? netmap_bdg_idx(netmap_ifp_to_vp(dst_ifp))
-	 	: NM_BDG_NOPORT);
-	//m->m_flags &= ~M_NOFREE;
 #if 0
 	m_free(m);
 #endif /* 0 */
-
-	return netmap_bdg_idx(netmap_ifp_to_vp(dst_ifp));
+	return ret;
 }
 
 /*
