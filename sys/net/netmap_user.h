@@ -65,6 +65,29 @@
 #ifndef _NET_NETMAP_USER_H_
 #define _NET_NETMAP_USER_H_
 
+#define NETMAP_DEVICE_NAME "/dev/netmap"
+#ifdef __CYGWIN__
+/*
+ * we can compile userspace apps with either cygwin or msvc,
+ * and we use _WIN32 to identify windows specific code
+ */
+#ifndef _WIN32
+#define _WIN32
+#endif	/* _WIN32 */
+
+#endif	/* __CYGWIN__ */
+
+#ifdef _WIN32
+#undef NETMAP_DEVICE_NAME
+#define NETMAP_DEVICE_NAME "/proc/sys/DosDevices/Global/netmap"
+#include <windows.h>
+#include <WinDef.h>
+#include <sys/cygwin.h>
+//#include <netioapi.h>
+//#include <winsock.h>
+//#define	IFNAMSIZ 256
+#endif
+
 #include <stdint.h>
 #include <sys/socket.h>		/* apple needs sockaddr */
 #include <net/if.h>		/* IFNAMSIZ */
@@ -284,12 +307,14 @@ typedef void (*nm_cb_t)(u_char *, const struct nm_pkthdr *, const u_char *d);
  *		-NN		bind individual NIC ring pair
  *		{NN		bind master side of pipe NN
  *		}NN		bind slave side of pipe NN
- *		a suffix starting with + and the following flags,
+ *		a suffix starting with / and the following flags,
  *		in any order:
  *		x		exclusive access
  *		z		zero copy monitor
  *		t		monitor tx side
  *		r		monitor rx side
+ *		R		bind only RX ring(s)
+ *		T		bind only TX ring(s)
  *
  * req		provides the initial values of nmreq before parsing ifname.
  *		Remember that the ifname parsing will override the ring
@@ -329,6 +354,13 @@ enum {
 static int nm_close(struct nm_desc *);
 
 /*
+ * nm_mmap()    do mmap or inherit from parent if the nr_arg2
+ *              (memory block) matches.
+ */
+
+static int nm_mmap(struct nm_desc *, const struct nm_desc *);
+
+/*
  * nm_inject() is the same as pcap_inject()
  * nm_dispatch() is the same as pcap_dispatch()
  * nm_nextpkt() is the same as pcap_next()
@@ -338,13 +370,235 @@ static int nm_inject(struct nm_desc *, const void *, size_t);
 static int nm_dispatch(struct nm_desc *, int, nm_cb_t, u_char *);
 static u_char *nm_nextpkt(struct nm_desc *, struct nm_pkthdr *);
 
+#ifdef _WIN32
+
+intptr_t _get_osfhandle(int); /* defined in io.h in windows */
+
+/*
+ * In windows we do not have yet native poll support, so we keep track
+ * of file descriptors associated to netmap ports to emulate poll on
+ * them and fall back on regular poll on other file descriptors.
+ */
+struct win_netmap_fd_list {
+	struct win_netmap_fd_list *next;
+	int win_netmap_fd;
+	HANDLE win_netmap_handle;
+};
+
+/* 
+ * list head containing all the netmap opened fd and their 
+ * windows HANDLE counterparts
+ */
+static struct win_netmap_fd_list *win_netmap_fd_list_head;
+
+static void
+win_insert_fd_record(int fd)
+{
+	struct win_netmap_fd_list *curr;
+
+	for (curr = win_netmap_fd_list_head; curr; curr = curr->next) {
+		if (fd == curr->win_netmap_fd) {
+			return;
+		}
+	}
+	curr = calloc(1, sizeof(*curr));
+	curr->next = win_netmap_fd_list_head;
+	curr->win_netmap_fd = fd;
+	curr->win_netmap_handle = IntToPtr(_get_osfhandle(fd));
+	win_netmap_fd_list_head = curr;
+}
+
+void
+win_remove_fd_record(int fd)
+{
+	struct win_netmap_fd_list *curr = win_netmap_fd_list_head;
+	struct win_netmap_fd_list *prev = NULL;
+	for (; curr ; prev = curr, curr = curr->next) {
+		if (fd != curr->win_netmap_fd)
+			continue;
+		/* found the entry */
+		if (prev == NULL) { /* we are freeing the first entry */
+			win_netmap_fd_list_head = curr->next;
+		} else {
+			prev->next = curr->next;
+		}
+		free(curr);
+		break;
+	}
+}
+
+
+HANDLE
+win_get_netmap_handle(int fd)
+{
+	struct win_netmap_fd_list *curr;
+
+	for (curr = win_netmap_fd_list_head; curr; curr = curr->next) {
+		if (fd == curr->win_netmap_fd) {
+			return curr->win_netmap_handle;
+		}
+	}
+	return NULL;
+}
+
+/*
+ * we need to wrap ioctl and mmap, at least for the netmap file descriptors
+ */
+
+/*
+ * use this function only from netmap_user.h internal functions
+ * same as ioctl, returns 0 on success and -1 on error 
+ */
+static int
+win_nm_ioctl_internal(HANDLE h, int32_t ctlCode, void *arg)
+{
+	DWORD bReturn = 0, szIn, szOut;
+	BOOL ioctlReturnStatus;
+	void *inParam = arg, *outParam = arg;
+
+	switch (ctlCode) {
+	case NETMAP_POLL:
+		szIn = sizeof(POLL_REQUEST_DATA);
+		szOut = sizeof(POLL_REQUEST_DATA);
+		break;
+	case NETMAP_MMAP:
+		szIn = 0;
+		szOut = sizeof(void*);
+		inParam = NULL; /* nothing on input */
+		break;
+	case NIOCTXSYNC:
+	case NIOCRXSYNC:
+		szIn = 0;
+		szOut = 0;
+		break;
+	case NIOCREGIF:
+		szIn = sizeof(struct nmreq);
+		szOut = sizeof(struct nmreq);
+		break;
+	case NIOCCONFIG:
+		D("unsupported NIOCCONFIG!");
+		return -1;
+
+	default: /* a regular ioctl */
+		D("invalid ioctl %x on netmap fd", ctlCode);
+		return -1;
+	}
+
+	ioctlReturnStatus = DeviceIoControl(h,
+				ctlCode, inParam, szIn,
+				outParam, szOut,
+				&bReturn, NULL);
+	// XXX note windows returns 0 on error or async call, 1 on success
+	// we could call GetLastError() to figure out what happened
+	return ioctlReturnStatus ? 0 : -1;
+}
+
+/* 
+ * this function is what must be called from user-space programs
+ * same as ioctl, returns 0 on success and -1 on error 
+ */
+static int
+win_nm_ioctl(int fd, int32_t ctlCode, void *arg)
+{
+	HANDLE h = win_get_netmap_handle(fd);
+
+	if (h == NULL) {
+		return ioctl(fd, ctlCode, arg);
+	} else {
+		return win_nm_ioctl_internal(h, ctlCode, arg);
+	}
+}
+
+#define ioctl win_nm_ioctl /* from now on, within this file ... */
+
+/*
+ * We cannot use the native mmap on windows
+ * The only parameter used is "fd", the other ones are just declared to
+ * make this signature comparable to the FreeBSD/Linux one
+ */
+static void *
+win32_mmap_emulated(void *addr, size_t length, int prot, int flags, int fd, int32_t offset)
+{
+	HANDLE h = win_get_netmap_handle(fd);
+
+	if (h == NULL) {
+		return mmap(addr, length, prot, flags, fd, offset);
+	} else {
+		MEMORY_ENTRY ret;
+
+		return win_nm_ioctl_internal(h, NETMAP_MMAP, &ret) ?
+			NULL : ret.pUsermodeVirtualAddress;
+	}
+}
+
+#define mmap win32_mmap_emulated
+
+#include <sys/poll.h> /* XXX needed to use the structure pollfd */
+
+static int 
+win_nm_poll(struct pollfd *fds, int nfds, int timeout)
+{
+	HANDLE h;
+
+	if (nfds != 1 || fds == NULL || (h = win_get_netmap_handle(fds->fd)) == NULL) {;
+		return poll(fds, nfds, timeout);
+	} else {
+		POLL_REQUEST_DATA prd;
+
+		prd.timeout = timeout;
+		prd.events = fds->events;
+
+		win_nm_ioctl_internal(h, NETMAP_POLL, &prd);
+		if ((prd.revents == POLLERR) || (prd.revents == STATUS_TIMEOUT)) {
+			return -1;
+		}
+		return 1;
+	}
+}
+
+#define poll win_nm_poll
+
+static int 
+win_nm_open(char* pathname, int flags){
+
+	if (strcmp(pathname, NETMAP_DEVICE_NAME) == 0){
+		int fd = open(NETMAP_DEVICE_NAME, O_RDWR);
+		if (fd < 0) {
+			return -1;
+		}
+
+		win_insert_fd_record(fd);
+		return fd;
+	}
+	else {
+
+		return open(pathname, flags);
+	}
+}
+
+#define open win_nm_open
+
+static int 
+win_nm_close(int fd){
+	if (fd != -1){
+		close(fd);
+		if (win_get_netmap_handle(fd) != NULL){
+			win_remove_fd_record(fd);
+		}
+	}
+	return 0;
+}
+
+#define close win_nm_close
+
+#endif /* _WIN32 */
 
 /*
  * Try to open, return descriptor if successful, NULL otherwise.
  * An invalid netmap name will return errno = 0;
  * You can pass a pointer to a pre-filled nm_desc to add special
  * parameters. Flags is used as follows
- * NM_OPEN_NO_MMAP	use the memory from arg, only
+ * NM_OPEN_NO_MMAP	use the memory from arg, only XXX avoid mmap
  *			if the nr_arg2 (memory block) matches.
  * NM_OPEN_ARG1		use req.nr_arg1 from arg
  * NM_OPEN_ARG2		use req.nr_arg2 from arg
@@ -449,6 +703,12 @@ nm_open(const char *ifname, const struct nmreq *req,
 			case 'r':
 				nr_flags |= NR_MONITOR_RX;
 				break;
+			case 'R':
+				nr_flags |= NR_RX_RINGS_ONLY;
+				break;
+			case 'T':
+				nr_flags |= NR_TX_RINGS_ONLY;
+				break;
 			default:
 				snprintf(errmsg, MAXERRMSG, "unrecognized flag: '%c'", *port);
 				goto fail;
@@ -474,7 +734,7 @@ nm_open(const char *ifname, const struct nmreq *req,
 		return NULL;
 	}
 	d->self = d;	/* set this early so nm_close() works */
-	d->fd = open("/dev/netmap", O_RDWR);
+	d->fd = open(NETMAP_DEVICE_NAME, O_RDWR);
 	if (d->fd < 0) {
 		snprintf(errmsg, MAXERRMSG, "cannot open /dev/netmap: %s", strerror(errno));
 		goto fail;
@@ -487,7 +747,7 @@ nm_open(const char *ifname, const struct nmreq *req,
 
 	/* these fields are overridden by ifname and flags processing */
 	d->req.nr_ringid |= nr_ringid;
-	d->req.nr_flags = nr_flags;
+	d->req.nr_flags |= nr_flags;
 	memcpy(d->req.nr_name, ifname, namelen);
 	d->req.nr_name[namelen] = '\0';
 	/* optionally import info from parent */
@@ -529,31 +789,10 @@ nm_open(const char *ifname, const struct nmreq *req,
 		goto fail;
 	}
 
-	if (IS_NETMAP_DESC(parent) && parent->mem &&
-	    parent->req.nr_arg2 == d->req.nr_arg2) {
-		/* do not mmap, inherit from parent */
-		d->memsize = parent->memsize;
-		d->mem = parent->mem;
-	} else {
-		/* XXX TODO: check if memsize is too large (or there is overflow) */
-		d->memsize = d->req.nr_memsize;
-		d->mem = mmap(0, d->memsize, PROT_WRITE | PROT_READ, MAP_SHARED,
-				d->fd, 0);
-		if (d->mem == MAP_FAILED) {
-			snprintf(errmsg, MAXERRMSG, "mmap failed: %s", strerror(errno));
-			goto fail;
-		}
-		d->done_mmap = 1;
-	}
-	{
-		struct netmap_if *nifp = NETMAP_IF(d->mem, d->req.nr_offset);
-		struct netmap_ring *r = NETMAP_RXRING(nifp, );
-
-		*(struct netmap_if **)(uintptr_t)&(d->nifp) = nifp;
-		*(struct netmap_ring **)(uintptr_t)&d->some_ring = r;
-		*(void **)(uintptr_t)&d->buf_start = NETMAP_BUF(r, 0);
-		*(void **)(uintptr_t)&d->buf_end =
-			(char *)d->mem + d->memsize;
+        /* if parent is defined, do nm_mmap() even if NM_OPEN_NO_MMAP is set */
+	if ((!(new_flags & NM_OPEN_NO_MMAP) || parent) && nm_mmap(d, parent)) {
+	        snprintf(errmsg, MAXERRMSG, "mmap failed: %s", strerror(errno));
+		goto fail;
 	}
 
 	nr_reg = d->req.nr_flags & NR_REG_MASK;
@@ -626,13 +865,53 @@ nm_close(struct nm_desc *d)
 		return EINVAL;
 	if (d->done_mmap && d->mem)
 		munmap(d->mem, d->memsize);
-	if (d->fd != -1)
+	if (d->fd != -1){
 		close(d->fd);
+	}
+		
 	bzero(d, sizeof(*d));
 	free(d);
 	return 0;
 }
 
+
+static int
+nm_mmap(struct nm_desc *d, const struct nm_desc *parent)
+{
+	//XXX TODO: check if mmap is already done
+
+	if (IS_NETMAP_DESC(parent) && parent->mem &&
+	    parent->req.nr_arg2 == d->req.nr_arg2) {
+		/* do not mmap, inherit from parent */
+		D("do not mmap, inherit from parent");
+		d->memsize = parent->memsize;
+		d->mem = parent->mem;
+	} else {
+		/* XXX TODO: check if memsize is too large (or there is overflow) */
+		d->memsize = d->req.nr_memsize;
+		d->mem = mmap(0, d->memsize, PROT_WRITE | PROT_READ, MAP_SHARED,
+				d->fd, 0);
+		if (d->mem == MAP_FAILED) {
+			goto fail;
+		}
+		d->done_mmap = 1;
+	}
+	{
+		struct netmap_if *nifp = NETMAP_IF(d->mem, d->req.nr_offset);
+		struct netmap_ring *r = NETMAP_RXRING(nifp, );
+
+		*(struct netmap_if **)(uintptr_t)&(d->nifp) = nifp;
+		*(struct netmap_ring **)(uintptr_t)&d->some_ring = r;
+		*(void **)(uintptr_t)&d->buf_start = NETMAP_BUF(r, 0);
+		*(void **)(uintptr_t)&d->buf_end =
+			(char *)d->mem + d->memsize;
+	}
+
+	return 0;
+
+fail:
+	return EINVAL;
+}
 
 /*
  * Same prototype as pcap_inject(), only need to cast.

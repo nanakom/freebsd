@@ -23,7 +23,7 @@
  * SUCH DAMAGE.
  */
 
-/* $FreeBSD$ */
+/* $FreeBSD: head/sys/dev/netmap/netmap_pipe.c 261909 2014-02-15 04:53:04Z luigi $ */
 
 #if defined(__FreeBSD__)
 #include <sys/cdefs.h> /* prerequisite */
@@ -54,6 +54,9 @@
 #warning OSX support is only partial
 #include "osx_glue.h"
 
+#elif defined(_WIN32)
+#include "win_glue.h"
+
 #else
 
 #error	Unsupported platform
@@ -72,9 +75,11 @@
 
 #define NM_PIPE_MAXSLOTS	4096
 
-int netmap_default_pipes = 0; /* ignored, kept for compatibility */
+static int netmap_default_pipes = 0; /* ignored, kept for compatibility */
+SYSBEGIN(vars_pipes);
 SYSCTL_DECL(_dev_netmap);
 SYSCTL_INT(_dev_netmap, OID_AUTO, default_pipes, CTLFLAG_RW, &netmap_default_pipes, 0 , "");
+SYSEND;
 
 /* allocate the pipe array in the parent adapter */
 static int
@@ -91,7 +96,11 @@ nm_pipe_alloc(struct netmap_adapter *na, u_int npipes)
 		return EINVAL;
 
         len = sizeof(struct netmap_pipe_adapter *) * npipes;
+#ifndef _WIN32
 	npa = realloc(na->na_pipes, len, M_DEVBUF, M_NOWAIT | M_ZERO);
+#else
+	npa = realloc(na->na_pipes, len, sizeof(struct netmap_pipe_adapter *)*na->na_max_pipes);
+#endif
 	if (npa == NULL)
 		return ENOMEM;
 
@@ -413,13 +422,38 @@ netmap_pipe_reg(struct netmap_adapter *na, int onoff)
 	struct netmap_pipe_adapter *pna =
 		(struct netmap_pipe_adapter *)na;
 	enum txrx t;
+	int i;
 
 	ND("%p: onoff %d", na, onoff);
 	if (onoff) {
-		na->na_flags |= NAF_NETMAP_ON;
+		for_rx_tx(t) {
+			for (i = 0; i < nma_get_nrings(na, t) + 1; i++) {
+				struct netmap_kring *kring = &NMR(na, t)[i];
+
+				if (nm_kring_pending_on(kring))
+					kring->nr_mode = NKR_NETMAP_ON;
+			}
+		}
+		if (na->active_fds == 0)
+			na->na_flags |= NAF_NETMAP_ON;
 	} else {
-		na->na_flags &= ~NAF_NETMAP_ON;
+		if (na->active_fds == 0)
+			na->na_flags &= ~NAF_NETMAP_ON;
+		for_rx_tx(t) {
+			for (i = 0; i < nma_get_nrings(na, t) + 1; i++) {
+				struct netmap_kring *kring = &NMR(na, t)[i];
+
+				if (nm_kring_pending_off(kring))
+					kring->nr_mode = NKR_NETMAP_OFF;
+			}
+		}
 	}
+
+	if (na->active_fds) {
+		D("active_fds %d", na->active_fds);
+		return 0;
+	}
+
 	if (pna->peer_ref) {
 		ND("%p: case 1.a or 2.a, nothing to do", na);
 		return 0;
@@ -429,7 +463,6 @@ netmap_pipe_reg(struct netmap_adapter *na, int onoff)
 		pna->peer->peer_ref = 0;
 		netmap_adapter_put(na);
 	} else {
-		int i;
 		ND("%p: case 2.b, grab peer", na);
 		netmap_adapter_get(na);
 		pna->peer->peer_ref = 1;
@@ -519,6 +552,7 @@ netmap_get_pipe_na(struct nmreq *nmr, struct netmap_adapter **na, int create)
 	struct nmreq pnmr;
 	struct netmap_adapter *pna; /* parent adapter */
 	struct netmap_pipe_adapter *mna, *sna, *req;
+	struct ifnet *ifp = NULL;
 	u_int pipe_id;
 	int role = nmr->nr_flags & NR_REG_MASK;
 	int error;
@@ -536,7 +570,7 @@ netmap_get_pipe_na(struct nmreq *nmr, struct netmap_adapter **na, int create)
 	memcpy(&pnmr.nr_name, nmr->nr_name, IFNAMSIZ);
 	/* pass to parent the requested number of pipes */
 	pnmr.nr_arg1 = nmr->nr_arg1;
-	error = netmap_get_na(&pnmr, &pna, create);
+	error = netmap_get_na(&pnmr, &pna, &ifp, create);
 	if (error) {
 		ND("parent lookup failed: %d", error);
 		return error;
@@ -652,15 +686,14 @@ found:
 	*na = &req->up;
 	netmap_adapter_get(*na);
 
-	/* write the configuration back */
-	nmr->nr_tx_rings = req->up.num_tx_rings;
-	nmr->nr_rx_rings = req->up.num_rx_rings;
-	nmr->nr_tx_slots = req->up.num_tx_desc;
-	nmr->nr_rx_slots = req->up.num_rx_desc;
-
 	/* keep the reference to the parent.
          * It will be released by the req destructor
          */
+
+	/* drop the ifp reference, if any */
+	if (ifp) {
+		if_rele(ifp);
+	}
 
 	return 0;
 
@@ -671,7 +704,7 @@ unregister_mna:
 free_mna:
 	free(mna, M_DEVBUF);
 put_out:
-	netmap_adapter_put(pna);
+	netmap_unget_na(pna, ifp);
 	return error;
 }
 

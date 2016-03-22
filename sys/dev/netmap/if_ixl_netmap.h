@@ -24,7 +24,7 @@
  */
 
 /*
- * $FreeBSD$
+ * $FreeBSD: head/sys/dev/netmap/if_ixl_netmap.h 279232 2015-02-24 06:20:50Z luigi $
  *
  * netmap support for: ixl
  *
