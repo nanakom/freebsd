@@ -360,7 +360,10 @@ ether_output(struct ifnet *ifp, struct mbuf *m,
 	 * This is done because BPF code shifts m_data pointer
 	 * to the end of ethernet header prior to calling if_output().
 	 */
-	M_PREPEND(m, hlen, M_NOWAIT);
+	if (m->m_flags & M_VALE)
+		m->m_data -= hlen;
+	else
+		M_PREPEND(m, hlen, M_NOWAIT);
 	if (m == NULL)
 		senderr(ENOBUFS);
 	if ((pflags & RT_HAS_HEADER) == 0) {
@@ -452,12 +455,8 @@ ether_output_frame(struct ifnet *ifp, struct mbuf *m)
 			return (0);
 	}
 
-	if ((m->m_flags & M_VALE) != 0) {
-		if (ifp != (struct ifnet *)m->m_pkthdr.PH_loc.ptr) {
-			printf("%s somebody rewrote loc.ptr?, m: 0x%p ifp %p %s loc.ptr %p..\n", __FUNCTION__, m, ifp, ifp->if_xname, m->m_pkthdr.PH_loc.ptr);
-		}
+	if ((m->m_flags & M_VALE) != 0)
 		return 0;
-	}
 
 	/*
 	 * Queue message on interface, update output statistics if

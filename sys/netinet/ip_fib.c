@@ -350,20 +350,16 @@ dxr_output(struct mbuf *m, struct dxr_nexthop *nh)
 	else
 		ip->ip_sum += htons(IPTTLDEC << 8);
 
-	if ((m->m_flags & M_VALE) != 0) {
-		/* save lookup-ed destination */
-		m->m_pkthdr.PH_loc.ptr = dst_ifp;
-		return;
-	}
+	if ((m->m_flags & M_VALE) != 0)
+		m->m_pkthdr.PH_loc.ptr = dst_ifp; /* save destination */
 
 	/*
 	 * Send the packet on its way.
 	 */
 	if ((dst_ifp->if_output)(dst_ifp, m,
-	    (struct sockaddr *) &dst_sin, NULL) != 0) {
+	    (struct sockaddr *) &dst_sin, NULL) != 0)
 		dxr_stats.output_errs++;
-		RD(1, "error in if_output dst_ifp %s pktlen %d", dst_ifp->if_xname, ntohs(ip->ip_len ));
-	} else
+	else
 		dxr_stats.fastpath++;
 }
 
