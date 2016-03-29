@@ -357,9 +357,11 @@ dxr_output(struct mbuf *m, struct dxr_nexthop *nh)
 	 * Send the packet on its way.
 	 */
 	if ((dst_ifp->if_output)(dst_ifp, m,
-	    (struct sockaddr *) &dst_sin, NULL) != 0)
+	    (struct sockaddr *) &dst_sin, NULL) != 0) {
 		dxr_stats.output_errs++;
-	else
+		if (m->m_flags & M_VALE)
+			m->m_pkthdr.PH_loc.ptr = NULL; /* reset destination */
+	} else
 		dxr_stats.fastpath++;
 }
 
