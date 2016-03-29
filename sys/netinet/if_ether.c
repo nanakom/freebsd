@@ -630,6 +630,8 @@ arpresolve(struct ifnet *ifp, int is_gw, struct mbuf *m,
 	if (plle && la)
 		LLE_WUNLOCK(la);
 	IF_AFDATA_RUNLOCK(ifp);
+	if (m->m_flags & M_VALE) /* do not trigger ARP request */
+		return EINVAL;
 
 	return (arpresolve_full(ifp, is_gw, la == NULL ? LLE_CREATE : 0, m, dst,
 	    desten, pflags, plle));
