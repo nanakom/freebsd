@@ -247,27 +247,7 @@ dxr_input(struct mbuf *m)
 	uint32_t src, dst;
 	int hlen;
 
-	/*
-	 * IPv4 header with no options ?
-	 */
-	hlen = ip->ip_hl << 2;
-	if (hlen != sizeof(struct ip)) {
-		dxr_stats.slowpath++;
-		return m;
-	}
-
 	dst = ntohl(ip->ip_dst.s_addr);
-	src = ntohl(ip->ip_src.s_addr);
-
-	/*
-	 * Broadcast / multicast / 255.x.x.x / 0.0.0.0 / packets.
-	 */
-	if ((m->m_flags & (M_BCAST | M_MCAST)) ||
-	    IN_BADCLASS(dst) || dst == INADDR_ANY || IN_BADCLASS(src) ||
-	    src == INADDR_ANY || IN_MULTICAST(dst) || IN_MULTICAST(src)) {
-		dxr_stats.local++;
-		return m;
-	}
 
 	/*
 	 * Find the nexthop.
@@ -284,37 +264,7 @@ dxr_input(struct mbuf *m)
 		dxr_stats.slowpath++;
 		return m;
 	}
-
-	/*
-	 * Check whether dst is a local unicast / broadcast address?
-	 */
-	if (dst_ifp == V_loif) {
-		dxr_stats.local++;
-		return m;
-	}
-	TAILQ_FOREACH(ifa, &dst_ifp->if_addrhead, ifa_link) {
-		if (ifa->ifa_addr->sa_family != AF_INET)
-			continue;
-		if (SIN(ifa->ifa_addr)->sin_addr.s_addr == ip->ip_dst.s_addr ||
-		    ((dst_ifp->if_flags & IFF_BROADCAST) &&
-		    ifa->ifa_broadaddr &&
-		    SIN(ifa->ifa_broadaddr)->sin_addr.s_addr ==
-		    ip->ip_dst.s_addr)) {
-			dxr_stats.local++;
-			return m;
-		}
-	}
-
-	/*
-	 * Packet size OK for fragmentation-free forwarding?  TTL OK?
-	 * Maybe an ICMP redirect is needed?
-	 */
-	if (m->m_pkthdr.len > dst_ifp->if_mtu || ip->ip_ttl <= IPTTLDEC
-	    /* || (dst_ifp == m->m_pkthdr.rcvif && V_ipsendredirects) */) {
-		dxr_stats.slowpath++;
-		return m;
-	}
-
+	
 	/*
 	 * We are done - dispatch the mbuf and inform the caller that
 	 * our packet was consumed.
@@ -340,15 +290,6 @@ dxr_output(struct mbuf *m, struct dxr_nexthop *nh)
 	}
 	dst_sin.sin_family = AF_INET;
 	dst_sin.sin_len = sizeof(dst);
-
-	/*
-	 * Modify the TTL and incrementally change the checksum.
-	 */
-	ip->ip_ttl -= IPTTLDEC;
-	if (ip->ip_sum >= htons(0xffff - (IPTTLDEC << 8)))
-		ip->ip_sum += htons(IPTTLDEC << 8) + 1;
-	else
-		ip->ip_sum += htons(IPTTLDEC << 8);
 
 	if ((m->m_flags & M_VALE) != 0)
 		m->m_pkthdr.PH_loc.ptr = dst_ifp; /* save destination */

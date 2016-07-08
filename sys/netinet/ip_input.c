@@ -556,7 +556,7 @@ tooshort:
 	/* For now we do not handle IPSEC in tryforward. */
 	if (!key_havesp(IPSEC_DIR_INBOUND) && !key_havesp(IPSEC_DIR_OUTBOUND) &&
 	    (V_ipforwarding == 1)) {
-		if (dxr_input(m) == NULL)
+		if (ip_tryforward(m) == NULL)
 			return;
 	}
 	/*
@@ -566,7 +566,7 @@ tooshort:
 		goto passin;
 #else
 	if (V_ipforwarding == 1) {
-		if (dxr_input(m) == NULL)
+		if (ip_tryforward(m) == NULL)
 			return;
 	}
 #endif /* IPSEC */

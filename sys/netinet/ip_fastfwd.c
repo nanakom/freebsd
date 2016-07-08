@@ -305,9 +305,13 @@ passin:
 	/*
 	 * Find route to destination.
 	 */
-	if ((dst = ip_findroute(&ro, dest, m)) == NULL)
-		return NULL;	/* icmp unreach already sent */
-	ifp = ro.ro_rt->rt_ifp;
+	if (dxr_input(m) == NULL) {
+		return NULL;
+	} else {
+		if ((dst = ip_findroute(&ro, dest, m)) == NULL)
+			return NULL;	/* icmp unreach already sent */
+		ifp = ro.ro_rt->rt_ifp;
+	}
 
 	/*
 	 * Immediately drop blackholed traffic, and directed broadcasts
@@ -366,9 +370,13 @@ forwardlocal:
 			m->m_flags &= ~M_IP_NEXTHOP;
 		}
 		RTFREE(ro.ro_rt);
-		if ((dst = ip_findroute(&ro, dest, m)) == NULL)
-			return NULL;	/* icmp unreach already sent */
-		ifp = ro.ro_rt->rt_ifp;
+		if (dxr_input(m) == NULL) {
+			return NULL;
+		} else {
+			if ((dst = ip_findroute(&ro, dest, m)) == NULL)
+				return NULL;	/* icmp unreach already sent */
+			ifp = ro.ro_rt->rt_ifp;
+		}
 	}
 
 passout:
