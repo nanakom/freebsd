@@ -243,9 +243,9 @@ dxr_input(struct mbuf *m)
 	struct ip *ip = mtod(m, struct ip *);
 	struct dxr_nexthop *nh;
 	struct ifnet *dst_ifp;
-	struct ifaddr *ifa;
-	uint32_t src, dst;
-	int hlen;
+	uint32_t dst;
+
+	printf("dxr_input start\n");
 
 	dst = ntohl(ip->ip_dst.s_addr);
 

@@ -102,6 +102,7 @@ __FBSDID("$FreeBSD$");
 #include <netinet/in_var.h>
 #include <netinet/ip.h>
 #include <netinet/ip_var.h>
+#include <netinet/ip_fib.h>
 #include <netinet/ip_icmp.h>
 #include <netinet/ip_options.h>
 
@@ -167,6 +168,8 @@ ip_tryforward(struct mbuf *m)
 	/*
 	 * Are we active and forwarding packets?
 	 */
+
+	printf("here is ip_tryforward\n");
 
 	M_ASSERTVALID(m);
 	M_ASSERTPKTHDR(m);
@@ -305,9 +308,12 @@ passin:
 	/*
 	 * Find route to destination.
 	 */
+	printf("call dxr_input\n");
 	if (dxr_input(m) == NULL) {
+		printf("fastpath:dxr_input\n");
 		return NULL;
 	} else {
+		printf("slowpatch:dxr_input\n");
 		if ((dst = ip_findroute(&ro, dest, m)) == NULL)
 			return NULL;	/* icmp unreach already sent */
 		ifp = ro.ro_rt->rt_ifp;

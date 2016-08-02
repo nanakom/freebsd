@@ -566,8 +566,11 @@ tooshort:
 		goto passin;
 #else
 	if (V_ipforwarding == 1) {
-		if (ip_tryforward(m) == NULL)
+		printf("call ip_tryforward\n");
+		if (ip_tryforward(m) == NULL) {
+			printf("fastpath:ip_tryforward\n");
 			return;
+		}
 	}
 #endif /* IPSEC */
 	if (m->m_flags & M_VALE) {
