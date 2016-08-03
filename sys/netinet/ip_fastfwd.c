@@ -137,7 +137,7 @@ ip_findroute(struct route *ro, struct in_addr dest, struct mbuf *m)
 		IPSTAT_INC(ips_noroute);
 		IPSTAT_INC(ips_cantforward);
 		if (rt)
-			RTFREE(rt);
+				RTFREE(rt);
 		icmp_error(m, ICMP_UNREACH, ICMP_UNREACH_HOST, 0, 0);
 		return NULL;
 	}
@@ -310,13 +310,25 @@ passin:
 	 */
 	printf("call dxr_input\n");
 	if (dxr_input(m) == NULL) {
-		printf("fastpath:dxr_input\n");
+		printf("dxr_input success\n");
 		return NULL;
 	} else {
-		printf("slowpatch:dxr_input\n");
-		if ((dst = ip_findroute(&ro, dest, m)) == NULL)
+		printf("dxr_input failed, now try ip_findroute\n");
+		if ((dst = ip_findroute(&ro, dest, m)) != NULL) {
+			printf("ip_findroute success\n");
+			if (m->m_flags & M_VALE) {
+				m->m_pkthdr.PH_loc.ptr = ro.ro_rt->rt_ifp;
+				return NULL;
+			}
+			ifp = ro.ro_rt->rt_ifp;
+		} else {
+			printf("ip_findroute failed\n");
+			if (m->m_flags & M_VALE) {
+				m->m_pkthdr.PH_loc.ptr = NULL; /* reset dst */
+				return m;
+			}
 			return NULL;	/* icmp unreach already sent */
-		ifp = ro.ro_rt->rt_ifp;
+		}
 	}
 
 	/*
@@ -376,12 +388,28 @@ forwardlocal:
 			m->m_flags &= ~M_IP_NEXTHOP;
 		}
 		RTFREE(ro.ro_rt);
+		printf("call dxr_input\n");
 		if (dxr_input(m) == NULL) {
+			printf("dxr_input success\n");
 			return NULL;
 		} else {
-			if ((dst = ip_findroute(&ro, dest, m)) == NULL)
+			printf("dxr_input failed, now try ip_findroute\n");
+			if ((dst = ip_findroute(&ro, dest, m)) != NULL) {
+				printf("ip_findroute success\n");
+				if (m->m_flags & M_VALE) {
+					m->m_pkthdr.PH_loc.ptr = ro.ro_rt->rt_ifp;
+					return NULL;
+				}
+				ifp = ro.ro_rt->rt_ifp;
+			} else {
+				printf("ip_findroute failed\n");
+				if (m->m_flags & M_VALE) {
+					m->m_pkthdr.PH_loc.ptr = NULL;
+					/* reset dst */
+					return m;
+				}
 				return NULL;	/* icmp unreach already sent */
-			ifp = ro.ro_rt->rt_ifp;
+			}
 		}
 	}
 

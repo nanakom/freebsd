@@ -568,14 +568,16 @@ tooshort:
 	if (V_ipforwarding == 1) {
 		printf("call ip_tryforward\n");
 		if (ip_tryforward(m) == NULL) {
-			printf("fastpath:ip_tryforward\n");
+			if (m->m_flags & VALE) 
+				printf("fastpath:ip_tryforward\n");
+			else 
+				printf("couldn't find route\n");
 			return;
 		}
 	}
 #endif /* IPSEC */
 	if (m->m_flags & M_VALE) {
 		/* dxr_input didn't get fastpath */
-		m->m_pkthdr.PH_loc.ptr = NULL;
 		printf("%s m:0x%p ifp:%s dxr_input has not found a route, returning\n", __FUNCTION__, m, ifp->if_xname);
 		return;
 	}
