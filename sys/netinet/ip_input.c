@@ -568,10 +568,7 @@ tooshort:
 	if (V_ipforwarding == 1) {
 		printf("call ip_tryforward\n");
 		if (ip_tryforward(m) == NULL) {
-			if (m->m_flags & VALE) 
-				printf("fastpath:ip_tryforward\n");
-			else 
-				printf("couldn't find route\n");
+			printf("back to ip_input\n");
 			return;
 		}
 	}

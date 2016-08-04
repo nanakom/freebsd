@@ -317,16 +317,20 @@ passin:
 		if ((dst = ip_findroute(&ro, dest, m)) != NULL) {
 			printf("ip_findroute success\n");
 			if (m->m_flags & M_VALE) {
+				printf("this is M_VALE packet\n");
 				m->m_pkthdr.PH_loc.ptr = ro.ro_rt->rt_ifp;
 				return NULL;
 			}
+			printf("this is normal packet\n");
 			ifp = ro.ro_rt->rt_ifp;
 		} else {
 			printf("ip_findroute failed\n");
 			if (m->m_flags & M_VALE) {
+				printf("this is M_VALE packet returning...\n");
 				m->m_pkthdr.PH_loc.ptr = NULL; /* reset dst */
 				return m;
 			}
+			printf("this is normal packet returning...\n");
 			return NULL;	/* icmp unreach already sent */
 		}
 	}
