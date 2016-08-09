@@ -91,6 +91,7 @@
 #include <net/netisr.h>
 #include <net/if_dl.h>
 #include <net/route.h>
+#include <net/route_var.h>
 
 #include <netinet/in.h>
 #include <netinet/in_systm.h>

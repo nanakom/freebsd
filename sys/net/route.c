@@ -1787,9 +1787,9 @@ rtrequest1_fib(int req, struct rt_addrinfo *info, struct rtentry **ret_nrt,
 		rnh->rnh_gen++;		/* Routing table updated */
 		RT_UNLOCK(rt);
 		if (fibnum == 0) {
-			RADIX_NODE_HEAD_LOCK(rnh);
+			RIB_WLOCK(rnh);
 			dxr_request(rt,req);
-			RADIX_NODE_HEAD_UNLOCK(rnh);
+			RIB_WUNLOCK(rnh);
 		}
 		break;
 	case RTM_CHANGE:
