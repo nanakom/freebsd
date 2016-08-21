@@ -138,9 +138,15 @@ ip_findroute(struct route *ro, struct in_addr dest, struct mbuf *m)
 		IPSTAT_INC(ips_cantforward);
 		if (rt)
 				RTFREE(rt);
+		if (m->m_flags & M_VALE) {
+			printf("this is M_VALE packet returning...\n");
+			m->m_pkthdr.PH_loc.ptr = NULL; /* reset dst */
+			return NULL;
+		}
 		icmp_error(m, ICMP_UNREACH, ICMP_UNREACH_HOST, 0, 0);
 		return NULL;
 	}
+
 	return dst;
 }
 
@@ -168,8 +174,6 @@ ip_tryforward(struct mbuf *m)
 	/*
 	 * Are we active and forwarding packets?
 	 */
-
-	printf("here is ip_tryforward\n");
 
 	M_ASSERTVALID(m);
 	M_ASSERTPKTHDR(m);
@@ -319,19 +323,21 @@ passin:
 			if (m->m_flags & M_VALE) {
 				printf("this is M_VALE packet\n");
 				m->m_pkthdr.PH_loc.ptr = ro.ro_rt->rt_ifp;
-				return NULL;
+				ifp = ro.ro_rt->rt_ifp;
+			} else {
+				printf("this is normal packet\n");
+				ifp = ro.ro_rt->rt_ifp;
 			}
-			printf("this is normal packet\n");
-			ifp = ro.ro_rt->rt_ifp;
 		} else {
 			printf("ip_findroute failed\n");
 			if (m->m_flags & M_VALE) {
 				printf("this is M_VALE packet returning...\n");
 				m->m_pkthdr.PH_loc.ptr = NULL; /* reset dst */
 				return m;
+			} else {
+				printf("this is normal packet returning...\n");
+				return NULL;	/* icmp unreach already sent */
 			}
-			printf("this is normal packet returning...\n");
-			return NULL;	/* icmp unreach already sent */
 		}
 	}
 
@@ -392,7 +398,7 @@ forwardlocal:
 			m->m_flags &= ~M_IP_NEXTHOP;
 		}
 		RTFREE(ro.ro_rt);
-		printf("call dxr_input\n");
+		printf("call dxr_input from forwardlocal\n");
 		if (dxr_input(m) == NULL) {
 			printf("dxr_input success\n");
 			return NULL;
@@ -402,8 +408,9 @@ forwardlocal:
 				printf("ip_findroute success\n");
 				if (m->m_flags & M_VALE) {
 					m->m_pkthdr.PH_loc.ptr = ro.ro_rt->rt_ifp;
-					return NULL;
+					ifp = ro.ro_rt->rt_ifp;
 				}
+				printf("this is a normal packet\n");
 				ifp = ro.ro_rt->rt_ifp;
 			} else {
 				printf("ip_findroute failed\n");
