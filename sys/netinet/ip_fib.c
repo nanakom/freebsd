@@ -345,7 +345,7 @@ radix_lookup(uint32_t dst)
 	sin.sin_len = sizeof(sin);
 	sin.sin_addr.s_addr = htonl(dst);
 
-	rn = rnh->rnh_matchaddr(&sin, rnh->head);
+	rn = rnh->rnh_matchaddr(&sin, &rnh->head);
         if (rn && ((rn->rn_flags & RNF_ROOT) == 0)) {
                 rt = (struct rtentry *) rn;
 		return (rt->rt_dxr_nexthop);
@@ -1128,7 +1128,7 @@ update_chunk_long(int chunk)
 	mask.sin_len = sizeof(mask);
 	mask.sin_addr.s_addr = htonl(~DXR_RANGE_MASK);
 
-	rnh->rnh_walktree_from($rnh->head, &dst, &mask, dxr_walk_long,
+	rnh->rnh_walktree_from(&rnh->head, &dst, &mask, dxr_walk_long,
 	    (void *) (long) chunk);
 
 	/* Flush any remaining objects on the dxr_heap */
