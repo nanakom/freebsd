@@ -336,7 +336,7 @@ radix_lookup(uint32_t dst)
 static int
 radix_lookup(uint32_t dst)
 {
-	struct radix_node_head *rnh = rt_tables_get_rnh(0, AF_INET);
+	struct rib_head *rnh = rt_tables_get_rnh(0, AF_INET);
 	struct radix_node *rn;
 	struct rtentry *rt;
 	struct sockaddr_in sin;
@@ -345,7 +345,7 @@ radix_lookup(uint32_t dst)
 	sin.sin_len = sizeof(sin);
 	sin.sin_addr.s_addr = htonl(dst);
 
-	rn = rnh->rnh_matchaddr(&sin, rnh);
+	rn = rnh->rnh_matchaddr(&sin, rnh->head);
         if (rn && ((rn->rn_flags & RNF_ROOT) == 0)) {
                 rt = (struct rtentry *) rn;
 		return (rt->rt_dxr_nexthop);
@@ -603,7 +603,7 @@ dxr_initheap(dst, chunk)
 	sin->sin_addr.s_addr = htonl(dst);
 
 	RADIX_NODE_HEAD_LOCK_ASSERT(rt_tables_get_rnh(0, AF_INET));
-	rtalloc_ign(&start_ro, RTF_RNH_LOCKED);
+	in_rtalloc_ign(&start_ro, RTF_RNH_LOCKED, 0);
 
 	if ((rt = start_ro.ro_rt)) {
 		struct sockaddr_in *dst = (struct sockaddr_in *)rt_key(rt);
@@ -732,7 +732,7 @@ dxr_updater(void *arg)
 #endif
 
 		if (async_updates) {
-			RADIX_NODE_HEAD_RLOCK(rt_tables_get_rnh(0, AF_INET));
+			RIB_RLOCK(rt_tables_get_rnh(0, AF_INET));
 			if (updates_pending &&
 			    updates_pending == last_pending) {
 #ifdef DXR_BUILD_TIMING
@@ -762,7 +762,7 @@ dxr_updater(void *arg)
 #endif
 			} 
 			last_pending = updates_pending;
-			RADIX_NODE_HEAD_RUNLOCK(rt_tables_get_rnh(0, AF_INET));
+			RIB_RUNLOCK(rt_tables_get_rnh(0, AF_INET));
 		}
 	}
 
@@ -1000,7 +1000,7 @@ chunk_unref(int chunk)
 static void
 update_chunk(int chunk)
 {
-	struct radix_node_head *rnh = rt_tables_get_rnh(0, AF_INET);
+	struct rib_head *rnh = rt_tables_get_rnh(0, AF_INET);
 	struct sockaddr_in dst, mask;
 	struct direct_entry *fdesc = &direct_tbl[chunk];
 	struct range_entry_short *fp;
@@ -1032,7 +1032,7 @@ update_chunk(int chunk)
 	mask.sin_len = sizeof(mask);
 	mask.sin_addr.s_addr = htonl(~DXR_RANGE_MASK);
 
-	if (rnh->rnh_walktree_from(rnh, &dst, &mask, dxr_walk,
+	if (rnh->rnh_walktree_from(&rnh->head, &dst, &mask, dxr_walk,
 	    (void *) (long) chunk) == ERANGE) {
 		update_chunk_long(chunk);
 		return;
@@ -1099,7 +1099,7 @@ update_chunk(int chunk)
 static void
 update_chunk_long(int chunk)
 {
-	struct radix_node_head *rnh = rt_tables_get_rnh(0, AF_INET);
+	struct rib_head *rnh = rt_tables_get_rnh(0, AF_INET);
 	struct sockaddr_in dst, mask;
 	struct direct_entry *fdesc = &direct_tbl[chunk];
 	struct range_entry_long *fp;
@@ -1128,7 +1128,7 @@ update_chunk_long(int chunk)
 	mask.sin_len = sizeof(mask);
 	mask.sin_addr.s_addr = htonl(~DXR_RANGE_MASK);
 
-	rnh->rnh_walktree_from(rnh, &dst, &mask, dxr_walk_long,
+	rnh->rnh_walktree_from($rnh->head, &dst, &mask, dxr_walk_long,
 	    (void *) (long) chunk);
 
 	/* Flush any remaining objects on the dxr_heap */
@@ -2098,7 +2098,7 @@ dxr_lookup_exercise(void *arg)
 		 * XXX locking!
 		 */
 #if defined(DXR_LOOKUP_CONSISTENCY_CHECK)
-		RADIX_NODE_HEAD_RLOCK(rt_tables_get_rnh(0, AF_INET));
+		RIB_RLOCK(rt_tables_get_rnh(0, AF_INET));
 #endif
 #if defined(DXR_LOOKUP_TIMING) || defined(RADIX_TIMING)
 		start = rdtsc();
@@ -2143,7 +2143,7 @@ dxr_lookup_exercise(void *arg)
 		iter_stats[cpu][0].cycles += stop - start;
 #endif
 #if defined(DXR_LOOKUP_CONSISTENCY_CHECK)
-		RADIX_NODE_HEAD_RUNLOCK(rt_tables_get_rnh(0, AF_INET));
+		RIB_RUNLOCK(rt_tables_get_rnh(0, AF_INET));
 #endif
 		dummy_index = random() & DUMMY_MEM_MASK;
 
