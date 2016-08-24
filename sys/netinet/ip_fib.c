@@ -246,8 +246,6 @@ dxr_input(struct mbuf *m)
 	struct ifnet *dst_ifp;
 	uint32_t dst;
 
-	printf("dxr_input start\n");
-
 	dst = ntohl(ip->ip_dst.s_addr);
 
 	/*

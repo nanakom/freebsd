@@ -556,11 +556,8 @@ tooshort:
 	/* For now we do not handle IPSEC in tryforward. */
 	if (!key_havesp(IPSEC_DIR_INBOUND) && !key_havesp(IPSEC_DIR_OUTBOUND) &&
 	    (V_ipforwarding == 1)) {
-		printf("call ip_tryforward in ifdef IPSEC\n");
-		if (ip_tryforward(m) == NULL) {
-			printf("back to ip_input\n");
+		if (ip_tryforward(m) == NULL) 
 			return;
-		}
 	}
 	if (m->m_flags & M_VALE) {
 		/* dxr_input didn't get fastpath */
@@ -574,11 +571,8 @@ tooshort:
 		goto passin;
 #else
 	if (V_ipforwarding == 1) {
-		printf("call ip_tryforward in ifdef else\n");
-		if (ip_tryforward(m) == NULL) {
-			printf("back to ip_input\n");
+		if (ip_tryforward(m) == NULL) 
 			return;
-		}
 	}
 #endif /* IPSEC */
 	if (m->m_flags & M_VALE) {

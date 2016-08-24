@@ -139,7 +139,6 @@ ip_findroute(struct route *ro, struct in_addr dest, struct mbuf *m)
 		if (rt)
 				RTFREE(rt);
 		if (m->m_flags & M_VALE) {
-			printf("this is M_VALE packet returning...\n");
 			m->m_pkthdr.PH_loc.ptr = NULL; /* reset dst */
 			return NULL;
 		}
@@ -312,32 +311,21 @@ passin:
 	/*
 	 * Find route to destination.
 	 */
-	printf("call dxr_input\n");
-	if (dxr_input(m) == NULL) {
-		printf("dxr_input success\n");
+	if (dxr_input(m) == NULL) 
 		return NULL;
-	} else {
-		printf("dxr_input failed, now try ip_findroute\n");
+	else {
 		if ((dst = ip_findroute(&ro, dest, m)) != NULL) {
-			printf("ip_findroute success\n");
 			if (m->m_flags & M_VALE) {
-				printf("this is M_VALE packet\n");
 				m->m_pkthdr.PH_loc.ptr = ro.ro_rt->rt_ifp;
 				ifp = ro.ro_rt->rt_ifp;
-			} else {
-				printf("this is normal packet\n");
+			} else 
 				ifp = ro.ro_rt->rt_ifp;
-			}
 		} else {
-			printf("ip_findroute failed\n");
 			if (m->m_flags & M_VALE) {
-				printf("this is M_VALE packet returning...\n");
 				m->m_pkthdr.PH_loc.ptr = NULL; /* reset dst */
 				return m;
-			} else {
-				printf("this is normal packet returning...\n");
+			} else 
 				return NULL;	/* icmp unreach already sent */
-			}
 		}
 	}
 
@@ -398,28 +386,23 @@ forwardlocal:
 			m->m_flags &= ~M_IP_NEXTHOP;
 		}
 		RTFREE(ro.ro_rt);
-		printf("call dxr_input from forwardlocal\n");
-		if (dxr_input(m) == NULL) {
-			printf("dxr_input success\n");
+		if (dxr_input(m) == NULL) 
 			return NULL;
-		} else {
-			printf("dxr_input failed, now try ip_findroute\n");
+		else {
 			if ((dst = ip_findroute(&ro, dest, m)) != NULL) {
-				printf("ip_findroute success\n");
 				if (m->m_flags & M_VALE) {
 					m->m_pkthdr.PH_loc.ptr = ro.ro_rt->rt_ifp;
 					ifp = ro.ro_rt->rt_ifp;
-				}
-				printf("this is a normal packet\n");
-				ifp = ro.ro_rt->rt_ifp;
+				} else 
+					ifp = ro.ro_rt->rt_ifp;
 			} else {
-				printf("ip_findroute failed\n");
 				if (m->m_flags & M_VALE) {
 					m->m_pkthdr.PH_loc.ptr = NULL;
 					/* reset dst */
 					return m;
-				}
-				return NULL;	/* icmp unreach already sent */
+				} else 
+					return NULL;
+					/* icmp unreach already sent */
 			}
 		}
 	}
