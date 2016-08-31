@@ -574,12 +574,12 @@ tooshort:
 		if (ip_tryforward(m) == NULL) 
 			return;
 	}
-#endif /* IPSEC */
 	if (m->m_flags & M_VALE) {
 		/* dxr_input didn't get fastpath */
 		printf("%s m:0x%p ifp:%s dxr_input has not found a route, returning\n", __FUNCTION__, m, ifp->if_xname);
 		return;
 	}
+#endif /* IPSEC */
 
 	/*
 	 * Run through list of hooks for input packets.
