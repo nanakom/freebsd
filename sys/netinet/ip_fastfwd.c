@@ -138,11 +138,8 @@ ip_findroute(struct route *ro, struct in_addr dest, struct mbuf *m)
 		IPSTAT_INC(ips_cantforward);
 		if (rt)
 			RTFREE(rt);
-		if (m->m_flags & M_VALE) {
-			m->m_pkthdr.PH_loc.ptr = NULL; /* reset dst */
-			return NULL;
-		}
-		icmp_error(m, ICMP_UNREACH, ICMP_UNREACH_HOST, 0, 0);
+		if (!(m->m_flags & M_VALE))
+			icmp_error(m, ICMP_UNREACH, ICMP_UNREACH_HOST, 0, 0);
 		return NULL;
 	}
 

@@ -99,6 +99,7 @@
 #include <netinet/in_var.h>
 #include <netinet/ip_var.h>
 #include <netinet/ip_fib.h>
+#include <netinet/ip_icmp.h>
 
 #include <machine/clock.h>
 #include <machine/in_cksum.h>
@@ -290,8 +291,16 @@ dxr_output(struct mbuf *m, struct dxr_nexthop *nh)
 	dst_sin.sin_family = AF_INET;
 	dst_sin.sin_len = sizeof(dst);
 
-	if ((m->m_flags & M_VALE) != 0)
+	if (m->m_flags & M_VALE)
 		m->m_pkthdr.PH_loc.ptr = dst_ifp; /* save destination */
+	/*
+	 * Check if media link state of interface is not down
+	 */
+	if (ifp->if_link_state == LINK_STATE_DOWN) {
+		if (!(m->m_flags & M_VALE)) 
+			icmp_error(m, ICMP_UNREACH, ICMP_UNREACH_HOST, 0, 0);
+		return;
+	}
 
 	/*
 	 * Send the packet on its way.
