@@ -296,7 +296,7 @@ dxr_output(struct mbuf *m, struct dxr_nexthop *nh)
 	/*
 	 * Check if media link state of interface is not down
 	 */
-	if (ifp->if_link_state == LINK_STATE_DOWN) {
+	if (dst_ifp->if_link_state == LINK_STATE_DOWN) {
 		if (!(m->m_flags & M_VALE)) 
 			icmp_error(m, ICMP_UNREACH, ICMP_UNREACH_HOST, 0, 0);
 		return;
