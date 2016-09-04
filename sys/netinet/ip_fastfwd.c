@@ -424,7 +424,8 @@ passout:
 	 * Check if media link state of interface is not down
 	 */
 	if (ifp->if_link_state == LINK_STATE_DOWN) {
-		icmp_error(m, ICMP_UNREACH, ICMP_UNREACH_HOST, 0, 0);
+		if (!(m->m_flags & M_VALE))
+			icmp_error(m, ICMP_UNREACH, ICMP_UNREACH_HOST, 0, 0);
 		goto consumed;
 	}
 
