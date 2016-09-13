@@ -121,6 +121,7 @@ __FBSDID("$FreeBSD: head/sys/dev/netmap/netmap.c 257176 2013-10-26 17:58:36Z gle
 #include <dev/netmap/netmap_mem2.h>
 
 #ifdef WITH_VALE
+static struct mbuf mzero;
 
 /*
  * system parameters (most of them in netmap_kern.h)
@@ -344,6 +345,7 @@ nm_find_bridge(const char *name, int create)
 			b->bdg_port_index[i] = i;
 		/* set the default function */
 		b->bdg_ops.lookup = netmap_dxr_lookup;
+		bzero(&mzero, sizeof(struct mbuf));
 		/* reset the MAC address table */
 		bzero(b->ht, sizeof(struct nm_hash_ent) * NM_BDG_HASH);
 		NM_BNS_GET(b);
@@ -1530,7 +1532,7 @@ netmap_dxr_lookup(struct nm_bdg_fwd *ft, uint8_t *dst_ring,
 	if (ntohs(eh->ether_type) != ETHERTYPE_IP)
 		return NM_BDG_NOPORT;
 	/* create mbuf and set VALE flag */
-	bzero(&dm, sizeof(dm));
+	dm = mzero;
 	dm.m_flags |= (M_VALE | M_PKTHDR);
 	dm.m_pkthdr.rcvif = ifp;
 	dm.m_data = buf;
