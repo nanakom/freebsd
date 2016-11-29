@@ -77,6 +77,8 @@ __FBSDID("$FreeBSD: head/sys/dev/netmap/netmap.c 257176 2013-10-26 17:58:36Z gle
 #include <net/if_var.h>
 #include <net/ethernet.h>
 #include <net/bpf.h>		/* BIOCIMMEDIATE */
+#include <netinet/in.h>
+#include <netinet/ip_fib.h>
 #include <machine/bus.h>	/* bus_dmamap_* */
 #include <sys/endian.h>
 #include <sys/refcount.h>
@@ -167,6 +169,8 @@ SYSEND;
 static int netmap_vp_create(struct nmreq *, struct ifnet *, struct netmap_vp_adapter **);
 static int netmap_vp_reg(struct netmap_adapter *na, int onoff);
 static int netmap_bwrap_reg(struct netmap_adapter *, int onoff);
+static void ethhdr_print(struct ether_header *eh);
+static void addr_print(uint32_t s_addr);
 
 /*
  * For each output interface, nm_bdg_q is used to construct a list.
@@ -1501,6 +1505,23 @@ netmap_vp_reg(struct netmap_adapter *na, int onoff)
 	return 0;
 }
 
+void ethhdr_print(struct ether_header *eh) 
+{
+	printf("Dst_mac %02x:%02x:%02x:%02x:%02x:%02x\n",
+			eh->ether_dhost[0], eh->ether_dhost[1], eh->ether_dhost[2],
+			eh->ether_dhost[3], eh->ether_dhost[4], eh->ether_dhost[5]);
+	printf("Src_mac %02x:%02x:%02x:%02x:%02x:%02x\n",
+			eh->ether_shost[0], eh->ether_shost[1], eh->ether_shost[2],
+			eh->ether_shost[3], eh->ether_shost[4], eh->ether_shost[5]);
+}
+
+void addr_print(uint32_t s_addr)
+{
+	unsigned char *p;
+	p = (unsigned char *)&s_addr;
+	printf("%u.%u.%u.%u\n", p[0], p[1], p[2], p[3]);
+}
+
 /* Lookup function for L3 routeing only IPv4 */
 u_int
 netmap_dxr_lookup(struct nm_bdg_fwd *ft, uint8_t *dst_ring,
@@ -1513,6 +1534,8 @@ netmap_dxr_lookup(struct nm_bdg_fwd *ft, uint8_t *dst_ring,
 	struct ether_header *eh;
 	struct mbuf dm;
 	u_int ret = NM_BDG_NOPORT;
+	struct dxr_nexthop *nh;
+	uint8_t index, i;
 	
 	/* safety check, unfortunately we have many cases */
 	if (buf_len >= 14 + na->up.virt_hdr_len) {
@@ -1538,14 +1561,21 @@ netmap_dxr_lookup(struct nm_bdg_fwd *ft, uint8_t *dst_ring,
 	dm.m_data = buf;
 	dm.m_len = dm.m_pkthdr.len = buf_len;
 	m = &dm;
-#if 0
-	m = m_devget(buf, buf_len, 0, ifp, NULL);
-	ND("created mbuf 0x%p", m);
-	m->m_flags |= M_VALE;
-	//m->m_flags |= M_NOFREE;
-#endif /* 0 */
+
 	ifp->if_input(ifp, m);
 	/* mbuf might not be consumed */
+	//eh = (struct ether_header *)buf;
+	//ethhdr_print(eh); 
+	nh = get_nexthop_tbl();
+	index = m->m_pkthdr.l5hlen;
+	nh[index].hdr = *(struct dxr_hdr_cache *)buf;
+	printf("writing cache, index = %d, nexthop_tbl = %p, &nexthop_tbl[index] = %p\n", index, nh, &nh[index]);
+	for (i = 0; i < 10; i++) {
+		printf("i = %d\n", i);
+		addr_print(nh[i].gw.s_addr);
+		ethhdr_print((struct ether_header *)&nh[i].hdr);
+	}
+
 	dst_ifp = (struct ifnet *)m->m_pkthdr.PH_loc.ptr;
 	if (!dst_ifp) {
 		RD(1, "lookup %p (%s) failed", m, ifp->if_xname);

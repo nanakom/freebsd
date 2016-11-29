@@ -44,12 +44,20 @@
 #define	DXR_VPORTS_MAX DIRECT_TBL_SIZE
 #endif
 
+#define ETHER_ADDR_LEN 6
+
+struct dxr_hdr_cache {
+	u_char dst[ETHER_ADDR_LEN];
+	u_char src[ETHER_ADDR_LEN];
+}__attribute__((__packed__));
+
 struct dxr_nexthop {
 	struct	ifnet *ifp;
 	struct	in_addr gw;
 	int32_t refcount;
 	int16_t ll_next;
 	int16_t ll_prev;
+	struct dxr_hdr_cache hdr;
 };
 
 struct range_entry_long {
@@ -112,5 +120,6 @@ struct dxr_stats {
 
 struct mbuf * dxr_input(struct mbuf *);
 void dxr_request(struct rtentry *, int);
+struct dxr_nexthop * get_nexthop_tbl(void);
 
 #endif /* _NETINET_IP_FIB_H_ */

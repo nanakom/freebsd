@@ -238,6 +238,12 @@ static uma_zone_t chunk_zone;
  * A significant portion of dxr_input() and dxr_output() skeleton was
  * borrowed from the ip_flow implementation, i.e. from ipflow_fastforward().
  */
+struct dxr_nexthop *
+get_nexthop_tbl(void)
+{
+	printf("get_nexthop_tbl nexthop_tbl = %p\n", nexthop_tbl);
+	return nexthop_tbl;
+}
 
 struct mbuf *
 dxr_input(struct mbuf *m)
@@ -246,6 +252,7 @@ dxr_input(struct mbuf *m)
 	struct dxr_nexthop *nh;
 	struct ifnet *dst_ifp;
 	uint32_t dst;
+	uint8_t index, i;
 
 	dst = ntohl(ip->ip_dst.s_addr);
 
@@ -254,7 +261,10 @@ dxr_input(struct mbuf *m)
 	 *
 	 * XXX Lookup structures should be protected somehow...
 	 */
-	nh = &nexthop_tbl[dxr_lookup(dst)];
+	nh = &nexthop_tbl[(index = dxr_lookup(dst))];
+	printf("in dxr, index = %d, nexthop_tbl = %p, &nexthop_tbl[index] = %p\n", index, nexthop_tbl, nh);
+	for (i = 0; i < 10; i++)
+		printf("in dxr, i = %d, nexthop_tbl[%d].gw = %d\n", i, i, ntohl(nexthop_tbl[i].gw.s_addr)); 
 	dst_ifp = nh->ifp;
 	if (dst_ifp == NULL) {
 		/*
@@ -264,7 +274,8 @@ dxr_input(struct mbuf *m)
 		dxr_stats.slowpath++;
 		return m;
 	}
-	
+	m->m_pkthdr.l5hlen = index;
+
 	/*
 	 * We are done - dispatch the mbuf and inform the caller that
 	 * our packet was consumed.
