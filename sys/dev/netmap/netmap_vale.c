@@ -1513,6 +1513,7 @@ void ethhdr_print(struct ether_header *eh)
 	printf("Src_mac %02x:%02x:%02x:%02x:%02x:%02x\n",
 			eh->ether_shost[0], eh->ether_shost[1], eh->ether_shost[2],
 			eh->ether_shost[3], eh->ether_shost[4], eh->ether_shost[5]);
+	printf("Ether_type %04x\n", eh->ether_type);
 }
 
 void addr_print(uint32_t s_addr)
@@ -1535,7 +1536,7 @@ netmap_dxr_lookup(struct nm_bdg_fwd *ft, uint8_t *dst_ring,
 	struct mbuf dm;
 	u_int ret = NM_BDG_NOPORT;
 	struct dxr_nexthop *nh;
-	uint8_t index, i;
+	uint8_t index;
 	
 	/* safety check, unfortunately we have many cases */
 	if (buf_len >= 14 + na->up.virt_hdr_len) {
@@ -1564,17 +1565,21 @@ netmap_dxr_lookup(struct nm_bdg_fwd *ft, uint8_t *dst_ring,
 
 	ifp->if_input(ifp, m);
 	/* mbuf might not be consumed */
-	//eh = (struct ether_header *)buf;
-	//ethhdr_print(eh); 
+	eh = (struct ether_header *)buf;
+	printf("ether header in vale after lookup. eh addr = %p\n", eh);
+	printf("ether header in vale after lookup. buf addr = %p\n", buf);
+	ethhdr_print(eh); 
 	nh = get_nexthop_tbl();
 	index = m->m_pkthdr.l5hlen;
-	nh[index].hdr = *(struct dxr_hdr_cache *)buf;
+	nh[index].hdr = *(struct ether_header *)buf;
+	/*
 	printf("writing cache, index = %d, nexthop_tbl = %p, &nexthop_tbl[index] = %p\n", index, nh, &nh[index]);
 	for (i = 0; i < 10; i++) {
 		printf("i = %d\n", i);
 		addr_print(nh[i].gw.s_addr);
 		ethhdr_print((struct ether_header *)&nh[i].hdr);
 	}
+	*/
 
 	dst_ifp = (struct ifnet *)m->m_pkthdr.PH_loc.ptr;
 	if (!dst_ifp) {

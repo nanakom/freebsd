@@ -43,13 +43,11 @@
 #undef DXR_VPORTS_MAX
 #define	DXR_VPORTS_MAX DIRECT_TBL_SIZE
 #endif
-
 #define ETHER_ADDR_LEN 6
+#define DXR_HDR_CACHE_CLEARED(a)	(a[0] & 1)
+#define DXR_HDR_CACHE_CLEAR(a)		(a[0] = 1)
 
-struct dxr_hdr_cache {
-	u_char dst[ETHER_ADDR_LEN];
-	u_char src[ETHER_ADDR_LEN];
-}__attribute__((__packed__));
+#include <net/ethernet.h>
 
 struct dxr_nexthop {
 	struct	ifnet *ifp;
@@ -57,7 +55,7 @@ struct dxr_nexthop {
 	int32_t refcount;
 	int16_t ll_next;
 	int16_t ll_prev;
-	struct dxr_hdr_cache hdr;
+	struct ether_header hdr;
 };
 
 struct range_entry_long {

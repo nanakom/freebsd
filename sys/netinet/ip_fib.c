@@ -92,6 +92,7 @@
 #include <net/if_dl.h>
 #include <net/route.h>
 #include <net/route_var.h>
+#include <net/ethernet.h>
 
 #include <netinet/in.h>
 #include <netinet/in_systm.h>
@@ -128,6 +129,8 @@ static void chunk_unref(int);
 static void apply_pending(void);
 static void dxr_init(void);
 static void dxr_check_tables(void);
+static void addr_print(uint32_t s_addr);
+static void ethhdr_print(struct ether_header *eh);
 
 #ifdef DIR_24_8
 #if (DXR_DIRECT_BITS != 24)
@@ -245,6 +248,24 @@ get_nexthop_tbl(void)
 	return nexthop_tbl;
 }
 
+void addr_print(uint32_t s_addr)
+{
+	unsigned char *p;
+	p = (unsigned char *)&s_addr;
+	printf("%u.%u.%u.%u\n", p[0], p[1], p[2], p[3]);
+}
+
+void ethhdr_print(struct ether_header *eh) 
+{
+	printf("Dst_mac %02x:%02x:%02x:%02x:%02x:%02x\n",
+			eh->ether_dhost[0], eh->ether_dhost[1], eh->ether_dhost[2],
+			eh->ether_dhost[3], eh->ether_dhost[4], eh->ether_dhost[5]);
+	printf("Src_mac %02x:%02x:%02x:%02x:%02x:%02x\n",
+			eh->ether_shost[0], eh->ether_shost[1], eh->ether_shost[2],
+			eh->ether_shost[3], eh->ether_shost[4], eh->ether_shost[5]);
+	printf("Ether_type %04x\n", eh->ether_type);
+}
+
 struct mbuf *
 dxr_input(struct mbuf *m)
 {
@@ -252,7 +273,7 @@ dxr_input(struct mbuf *m)
 	struct dxr_nexthop *nh;
 	struct ifnet *dst_ifp;
 	uint32_t dst;
-	uint8_t index, i;
+	uint8_t index;
 
 	dst = ntohl(ip->ip_dst.s_addr);
 
@@ -262,9 +283,11 @@ dxr_input(struct mbuf *m)
 	 * XXX Lookup structures should be protected somehow...
 	 */
 	nh = &nexthop_tbl[(index = dxr_lookup(dst))];
+	/*
 	printf("in dxr, index = %d, nexthop_tbl = %p, &nexthop_tbl[index] = %p\n", index, nexthop_tbl, nh);
 	for (i = 0; i < 10; i++)
 		printf("in dxr, i = %d, nexthop_tbl[%d].gw = %d\n", i, i, ntohl(nexthop_tbl[i].gw.s_addr)); 
+	*/
 	dst_ifp = nh->ifp;
 	if (dst_ifp == NULL) {
 		/*
@@ -291,6 +314,7 @@ dxr_output(struct mbuf *m, struct dxr_nexthop *nh)
 	struct ip *ip = mtod(m, struct ip *);
 	struct sockaddr_in dst_sin;
 	uint32_t dst;
+	struct ether_header *hdr = NULL;
 
 	if (nh->gw.s_addr) {
 		dst = ntohl(nh->gw.s_addr);
@@ -310,6 +334,26 @@ dxr_output(struct mbuf *m, struct dxr_nexthop *nh)
 	if (dst_ifp->if_link_state == LINK_STATE_DOWN) {
 		if (!(m->m_flags & M_VALE)) 
 			icmp_error(m, ICMP_UNREACH, ICMP_UNREACH_HOST, 0, 0);
+		return;
+	}
+
+	/* bypass ethernet_output routine */
+	printf("print cache info \n");
+	ethhdr_print((struct ether_header *)&nh->hdr);
+	printf("print cache addr = %p\n", &nh->hdr);
+
+	if ((m->m_flags & M_VALE) && !(DXR_HDR_CACHE_CLEARED(nh->hdr.ether_dhost))) {
+		printf("replace ethernet header\n");
+		hdr = (struct ether_header *)(m->m_data - ETHER_HDR_LEN);
+		*hdr = nh->hdr;
+	}
+
+	if (hdr != NULL) {
+		printf("print ethernet header. addr = %p\n", hdr);
+		ethhdr_print(hdr);
+		printf("print m->m_data -14. addr = %p\n", m->m_data - ETHER_HDR_LEN);
+		ethhdr_print((struct ether_header *)m->m_data - ETHER_HDR_LEN);
+		printf("if_output skip returning...\n");
 		return;
 	}
 
@@ -1557,6 +1601,9 @@ dxr_init(void)
 	    M_NOWAIT);
 	nexthop_tbl = malloc(sizeof(*nexthop_tbl) * DXR_VPORTS_MAX, M_TEMP,
 	    M_NOWAIT);
+	for (i = 0; i < DXR_VPORTS_MAX; i++) {
+		DXR_HDR_CACHE_CLEAR(nexthop_tbl[i].hdr.ether_dhost);
+	}
 	if (direct_tbl == NULL || range_tbl == NULL || nexthop_tbl == NULL) {
 		printf("DXR malloc failed!\n");
 		return;
