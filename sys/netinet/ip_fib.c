@@ -275,7 +275,7 @@ dxr_input(struct mbuf *m)
 	uint32_t dst;
 	uint8_t index;
 
-	dst = ntoh(ip->ip_dst.s_addr);
+	dst = ntohl(ip->ip_dst.s_addr);
 
 	/*
 	 * Find the nexthop.
@@ -351,23 +351,14 @@ dxr_output(struct mbuf *m, struct dxr_nexthop *nh)
 		printf("replace ethernet header\n");
 		hdr = (struct ether_header *)(m->m_data - ETHER_HDR_LEN);
 		*hdr = nh->hdr;
+		m->m_data -= ETHER_HDR_LEN;
+		printf("if_output skip returning...\n");
+		return;
 		//hdr = mtod(m, struct ether_header *);
 		//memcpy(hdr, &nh->hdr, ETHER_HDR_LEN); 
 	}
-	
-	if (hdr != NULL) {
-		//printf("print ethernet header. addr = %p\n", hdr);
-		//ethhdr_print(hdr);
-		//printf("print m->m_data -14. addr = %p\n", (m->m_data - ETHER_HDR_LEN));
-		//ethhdr_print((struct ether_header *)(m->m_data - ETHER_HDR_LEN));
-		printf("if_output skip returning...\n");
-	}
-	
-		
-	if ((m->m_flags & M_VALE) != 0) {
-		m->m_data -= ETHER_HDR_LEN;
-		return;
-	}
+
+	printf("no cache and go to if_output\n");
 
 	/*
 	 * Send the packet on its way.
