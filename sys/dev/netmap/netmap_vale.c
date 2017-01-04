@@ -1507,13 +1507,13 @@ netmap_vp_reg(struct netmap_adapter *na, int onoff)
 
 void ethhdr_print(struct ether_header *eh) 
 {
-	printf("Dst_mac %02x:%02x:%02x:%02x:%02x:%02x\n",
+	printf("Dst_mac %02x:%02x:%02x:%02x:%02x:%02x ",
 			eh->ether_dhost[0], eh->ether_dhost[1], eh->ether_dhost[2],
 			eh->ether_dhost[3], eh->ether_dhost[4], eh->ether_dhost[5]);
-	printf("Src_mac %02x:%02x:%02x:%02x:%02x:%02x\n",
+	printf("Src_mac %02x:%02x:%02x:%02x:%02x:%02x ",
 			eh->ether_shost[0], eh->ether_shost[1], eh->ether_shost[2],
 			eh->ether_shost[3], eh->ether_shost[4], eh->ether_shost[5]);
-	printf("Ether_type %04x\n", eh->ether_type);
+	printf("Ether_type %04x\n", ntohs(eh->ether_type));
 }
 
 void addr_print(uint32_t s_addr)
@@ -1562,12 +1562,15 @@ netmap_dxr_lookup(struct nm_bdg_fwd *ft, uint8_t *dst_ring,
 	dm.m_data = buf;
 	dm.m_len = dm.m_pkthdr.len = buf_len;
 	m = &dm;
+	D("before lookup m_data (buf) %p len %u", dm.m_data, buf_len);
+	ethhdr_print(eh);
 
 	ifp->if_input(ifp, m);
+
 	/* mbuf might not be consumed */
 	eh = (struct ether_header *)buf;
-	printf("ether header in vale after lookup. eh addr = %p\n", eh);
-	printf("ether header in vale after lookup. buf addr = %p\n", buf);
+	D("after lookup buf %p m %p m_data %p", buf, m, m ? m->m_data : NULL);
+	//printf("ether header in vale after lookup. buf addr = %p\n", buf);
 	ethhdr_print(eh); 
 	nh = get_nexthop_tbl();
 	index = m->m_pkthdr.l5hlen;
@@ -1583,20 +1586,24 @@ netmap_dxr_lookup(struct nm_bdg_fwd *ft, uint8_t *dst_ring,
 
 	dst_ifp = (struct ifnet *)m->m_pkthdr.PH_loc.ptr;
 	if (!dst_ifp) {
-		RD(1, "lookup %p (%s) failed", m, ifp->if_xname);
+		D("lookup failed");
 	} else if (!(dst_ifp->if_capenable & IFCAP_NETMAP /* XXX */)) {
-		RD(1, "dst_ifp %s is not netmap mode", dst_ifp->if_xname);
+		D("dst_ifp %s is not netmap mode", dst_ifp->if_xname);
 	} else if (netmap_ifp_to_vp(dst_ifp) == NULL) {
-		RD(1, "dst_ifp %s is not on a VALE switch", dst_ifp->if_xname);
+		D("dst_ifp %s is not on a VALE switch", dst_ifp->if_xname);
 	} else if (netmap_ifp_to_vp(dst_ifp)->na_bdg != na->na_bdg) {
 		RD(1, "dst_ifp %s is on different switch", dst_ifp->if_xname);
 	} else {
+		uint16_t type, plen;
 		if (unlikely((uint8_t *)m->m_data != buf)) {
 			RD(1, "m_data differs from buf by %d",
 				(int)((uint8_t *)m->m_data - buf));
 			m_copydata(m, 0, MBUF_LEN(m), buf);
 		}
 		ret = netmap_bdg_idx(netmap_ifp_to_vp(dst_ifp));
+		type = ntohs(*(uint16_t *)(buf + 12));
+		plen = ntohs(*(uint16_t *)(buf + 16));
+		D("ether type 0x%x pkt len %u", type, plen);
 	}
 #if 0
 	m_free(m);

@@ -275,13 +275,15 @@ dxr_input(struct mbuf *m)
 	uint32_t dst;
 	uint8_t index;
 
-	dst = ntohl(ip->ip_dst.s_addr);
+	dst = ntoh(ip->ip_dst.s_addr);
 
 	/*
 	 * Find the nexthop.
 	 *
 	 * XXX Lookup structures should be protected somehow...
 	 */
+	if (m->m_flags & M_VALE)
+		printf("%s: start m (%p)\n", __func__, m);
 	nh = &nexthop_tbl[(index = dxr_lookup(dst))];
 	/*
 	printf("in dxr, index = %d, nexthop_tbl = %p, &nexthop_tbl[index] = %p\n", index, nexthop_tbl, nh);
@@ -295,6 +297,8 @@ dxr_input(struct mbuf *m)
 		 */
 		dxr_stats.no_route++;
 		dxr_stats.slowpath++;
+		if (m->m_flags & M_VALE)
+			printf("%s: no dst_ifp, returning m (%p)\n", __func__, m);
 		return m;
 	}
 	m->m_pkthdr.l5hlen = index;
@@ -326,8 +330,9 @@ dxr_output(struct mbuf *m, struct dxr_nexthop *nh)
 	dst_sin.sin_family = AF_INET;
 	dst_sin.sin_len = sizeof(dst);
 
-	if (m->m_flags & M_VALE)
+	if (m->m_flags & M_VALE) {
 		m->m_pkthdr.PH_loc.ptr = dst_ifp; /* save destination */
+	}
 	/*
 	 * Check if media link state of interface is not down
 	 */
@@ -338,22 +343,29 @@ dxr_output(struct mbuf *m, struct dxr_nexthop *nh)
 	}
 
 	/* bypass ethernet_output routine */
-	printf("print cache info \n");
-	ethhdr_print((struct ether_header *)&nh->hdr);
-	printf("print cache addr = %p\n", &nh->hdr);
+	//printf("print cache info \n");
+	//ethhdr_print((struct ether_header *)&nh->hdr);
+	//printf("print cache addr = %p\n", &nh->hdr);
 
 	if ((m->m_flags & M_VALE) && !(DXR_HDR_CACHE_CLEARED(nh->hdr.ether_dhost))) {
 		printf("replace ethernet header\n");
 		hdr = (struct ether_header *)(m->m_data - ETHER_HDR_LEN);
 		*hdr = nh->hdr;
+		//hdr = mtod(m, struct ether_header *);
+		//memcpy(hdr, &nh->hdr, ETHER_HDR_LEN); 
 	}
-
+	
 	if (hdr != NULL) {
-		printf("print ethernet header. addr = %p\n", hdr);
-		ethhdr_print(hdr);
-		printf("print m->m_data -14. addr = %p\n", m->m_data - ETHER_HDR_LEN);
-		ethhdr_print((struct ether_header *)m->m_data - ETHER_HDR_LEN);
+		//printf("print ethernet header. addr = %p\n", hdr);
+		//ethhdr_print(hdr);
+		//printf("print m->m_data -14. addr = %p\n", (m->m_data - ETHER_HDR_LEN));
+		//ethhdr_print((struct ether_header *)(m->m_data - ETHER_HDR_LEN));
 		printf("if_output skip returning...\n");
+	}
+	
+		
+	if ((m->m_flags & M_VALE) != 0) {
+		m->m_data -= ETHER_HDR_LEN;
 		return;
 	}
 

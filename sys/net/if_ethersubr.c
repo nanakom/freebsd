@@ -114,6 +114,7 @@ static	int ether_resolvemulti(struct ifnet *, struct sockaddr **,
 static	void ether_reassign(struct ifnet *, struct vnet *, char *);
 #endif
 static	int ether_requestencap(struct ifnet *, struct if_encap_req *);
+static void ethhdr_print(struct ether_header *);
 
 #define	ETHER_IS_BROADCAST(addr) \
 	(bcmp(etherbroadcastaddr, (addr), ETHER_ADDR_LEN) == 0)
@@ -276,6 +277,18 @@ ether_resolve_addr(struct ifnet *ifp, struct mbuf *m,
  * Use trailer local net encapsulation if enough data in first
  * packet leaves a multiple of 512 bytes of data in remainder.
  */
+
+void ethhdr_print(struct ether_header *eh) 
+{
+	printf("Dst_mac %02x:%02x:%02x:%02x:%02x:%02x\n",
+			eh->ether_dhost[0], eh->ether_dhost[1], eh->ether_dhost[2],
+			eh->ether_dhost[3], eh->ether_dhost[4], eh->ether_dhost[5]);
+	printf("Src_mac %02x:%02x:%02x:%02x:%02x:%02x\n",
+			eh->ether_shost[0], eh->ether_shost[1], eh->ether_shost[2],
+			eh->ether_shost[3], eh->ether_shost[4], eh->ether_shost[5]);
+	printf("Ether_type %04x\n", eh->ether_type);
+}
+
 int
 ether_output(struct ifnet *ifp, struct mbuf *m,
 	const struct sockaddr *dst, struct route *ro)
@@ -296,9 +309,14 @@ ether_output(struct ifnet *ifp, struct mbuf *m,
 	if (ro != NULL) {
 		/* XXX BPF uses ro_prepend */
 		if (ro->ro_prepend != NULL) {
+			if ((m->m_flags & M_VALE) != 0)
+				printf("check code pass ro->ro_prepend !=NULL\n");
 			phdr = ro->ro_prepend;
 			hlen = ro->ro_plen;
 		} else if (!(m->m_flags & (M_BCAST | M_MCAST))) {
+			if ((m->m_flags & M_VALE) != 0)
+
+				printf("check code pass else if not M_BCAST | M_MCAST\n");
 			if ((ro->ro_flags & RT_LLE_CACHE) != 0) {
 				lle = ro->ro_lle;
 				if (lle != NULL &&
@@ -313,6 +331,8 @@ ether_output(struct ifnet *ifp, struct mbuf *m,
 				}
 			}
 			if (lle != NULL) {
+				if ((m->m_flags & M_VALE) != 0)
+					printf("check code pass lle != NULL\n");
 				phdr = lle->r_linkdata;
 				hlen = lle->r_hdrlen;
 				pflags = lle->r_flags;
@@ -335,6 +355,8 @@ ether_output(struct ifnet *ifp, struct mbuf *m,
 		senderr(ENETDOWN);
 
 	if (phdr == NULL) {
+		if ((m->m_flags & M_VALE) != 0)
+			printf("check code pass if phdr == NULL\n");
 		/* No prepend data supplied. Try to calculate ourselves. */
 		phdr = linkhdr;
 		hlen = ETHER_HDR_LEN;
@@ -367,8 +389,18 @@ ether_output(struct ifnet *ifp, struct mbuf *m,
 	if (m == NULL)
 		senderr(ENOBUFS);
 	if ((pflags & RT_HAS_HEADER) == 0) {
+		if ((m->m_flags & M_VALE) != 0)
+			printf("check code pass pflags & RT_HAS_HEADER\n");
 		eh = mtod(m, struct ether_header *);
 		memcpy(eh, phdr, hlen);
+		if ((m->m_flags & M_VALE) != 0) {
+			printf("hlen = %d\n", hlen);
+			printf("phdr = %p\n, and print phdr\n", phdr);
+			ethhdr_print((struct ether_header *)phdr);
+			printf("in ether_output eh = %p\n", eh);
+			ethhdr_print(eh);
+			
+		}
 	}
 
 	/*
