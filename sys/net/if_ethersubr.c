@@ -394,9 +394,6 @@ ether_output(struct ifnet *ifp, struct mbuf *m,
 		eh = mtod(m, struct ether_header *);
 		memcpy(eh, phdr, hlen);
 		if ((m->m_flags & M_VALE) != 0) {
-			printf("hlen = %d\n", hlen);
-			printf("phdr = %p\n, and print phdr\n", phdr);
-			ethhdr_print((struct ether_header *)phdr);
 			printf("in ether_output eh = %p\n", eh);
 			ethhdr_print(eh);
 			

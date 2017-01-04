@@ -1570,11 +1570,13 @@ netmap_dxr_lookup(struct nm_bdg_fwd *ft, uint8_t *dst_ring,
 	/* mbuf might not be consumed */
 	eh = (struct ether_header *)buf;
 	D("after lookup buf %p m %p m_data %p", buf, m, m ? m->m_data : NULL);
-	//printf("ether header in vale after lookup. buf addr = %p\n", buf);
 	ethhdr_print(eh); 
 	nh = get_nexthop_tbl();
 	index = m->m_pkthdr.l5hlen;
-	nh[index].hdr = *(struct ether_header *)buf;
+	if (DXR_HDR_CACHE_CLEARED(nh[index].hdr.ether_dhost)) {
+		printf("writing cache info\n");
+		nh[index].hdr = *(struct ether_header *)buf;
+	}
 	/*
 	printf("writing cache, index = %d, nexthop_tbl = %p, &nexthop_tbl[index] = %p\n", index, nh, &nh[index]);
 	for (i = 0; i < 10; i++) {
