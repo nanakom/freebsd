@@ -343,6 +343,7 @@ dxr_output(struct mbuf *m, struct dxr_nexthop *nh)
 	}
 
 	/* bypass ethernet_output routine */
+	
 	printf("print cache info \n");
 	ethhdr_print((struct ether_header *)&nh->hdr);
 
