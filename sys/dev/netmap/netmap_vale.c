@@ -1562,19 +1562,19 @@ netmap_dxr_lookup(struct nm_bdg_fwd *ft, uint8_t *dst_ring,
 	dm.m_data = buf;
 	dm.m_len = dm.m_pkthdr.len = buf_len;
 	m = &dm;
-	D("before lookup m_data (buf) %p len %u", dm.m_data, buf_len);
-	ethhdr_print(eh);
+	//D("before lookup m_data (buf) %p len %u", dm.m_data, buf_len);
+	//ethhdr_print(eh);
 
 	ifp->if_input(ifp, m);
 
 	/* mbuf might not be consumed */
 	eh = (struct ether_header *)buf;
-	D("after lookup buf %p m %p m_data %p", buf, m, m ? m->m_data : NULL);
-	ethhdr_print(eh); 
+	//D("after lookup buf %p m %p m_data %p", buf, m, m ? m->m_data : NULL);
+	//ethhdr_print(eh); 
 	nh = get_nexthop_tbl();
 	index = m->m_pkthdr.l5hlen;
 	if (DXR_HDR_CACHE_CLEARED(nh[index].hdr.ether_dhost)) {
-		printf("writing cache info\n");
+		//printf("writing cache info\n");
 		nh[index].hdr = *(struct ether_header *)buf;
 	}
 	/*
@@ -1596,16 +1596,17 @@ netmap_dxr_lookup(struct nm_bdg_fwd *ft, uint8_t *dst_ring,
 	} else if (netmap_ifp_to_vp(dst_ifp)->na_bdg != na->na_bdg) {
 		RD(1, "dst_ifp %s is on different switch", dst_ifp->if_xname);
 	} else {
-		uint16_t type, plen;
+		//uint16_t type, plen;
 		if (unlikely((uint8_t *)m->m_data != buf)) {
-			RD(1, "m_data differs from buf by %d",
+			/* RD(1, "m_data differs from buf by %d",
 				(int)((uint8_t *)m->m_data - buf));
+				*/
 			m_copydata(m, 0, MBUF_LEN(m), buf);
 		}
 		ret = netmap_bdg_idx(netmap_ifp_to_vp(dst_ifp));
-		type = ntohs(*(uint16_t *)(buf + 12));
-		plen = ntohs(*(uint16_t *)(buf + 16));
-		D("ether type 0x%x pkt len %u", type, plen);
+		//type = ntohs(*(uint16_t *)(buf + 12));
+		//plen = ntohs(*(uint16_t *)(buf + 16));
+		//D("ether type 0x%x pkt len %u", type, plen);
 	}
 #if 0
 	m_free(m);

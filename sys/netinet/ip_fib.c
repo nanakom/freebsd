@@ -130,7 +130,7 @@ static void apply_pending(void);
 static void dxr_init(void);
 static void dxr_check_tables(void);
 static void addr_print(uint32_t s_addr);
-static void ethhdr_print(struct ether_header *eh);
+//static void ethhdr_print(struct ether_header *eh);
 
 #ifdef DIR_24_8
 #if (DXR_DIRECT_BITS != 24)
@@ -244,7 +244,7 @@ static uma_zone_t chunk_zone;
 struct dxr_nexthop *
 get_nexthop_tbl(void)
 {
-	printf("get_nexthop_tbl nexthop_tbl = %p\n", nexthop_tbl);
+	//printf("get_nexthop_tbl nexthop_tbl = %p\n", nexthop_tbl);
 	return nexthop_tbl;
 }
 
@@ -255,6 +255,7 @@ void addr_print(uint32_t s_addr)
 	printf("%u.%u.%u.%u\n", p[0], p[1], p[2], p[3]);
 }
 
+/*
 void ethhdr_print(struct ether_header *eh) 
 {
 	printf("Dst_mac %02x:%02x:%02x:%02x:%02x:%02x\n",
@@ -265,6 +266,7 @@ void ethhdr_print(struct ether_header *eh)
 			eh->ether_shost[3], eh->ether_shost[4], eh->ether_shost[5]);
 	printf("Ether_type %04x\n", eh->ether_type);
 }
+*/
 
 struct mbuf *
 dxr_input(struct mbuf *m)
@@ -344,21 +346,20 @@ dxr_output(struct mbuf *m, struct dxr_nexthop *nh)
 
 	/* bypass ethernet_output routine */
 	
-	printf("print cache info \n");
+	/* printf("print cache info \n");
 	ethhdr_print((struct ether_header *)&nh->hdr);
+	*/
 
 	if ((m->m_flags & M_VALE) && !(DXR_HDR_CACHE_CLEARED(nh->hdr.ether_dhost))) {
-		printf("replace ethernet header\n");
+		//printf("replace ethernet header\n");
 		hdr = (struct ether_header *)(m->m_data - ETHER_HDR_LEN);
 		*hdr = nh->hdr;
 		m->m_data -= ETHER_HDR_LEN;
-		printf("if_output skip returning...\n");
+		//printf("if_output skip returning...\n");
 		return;
-		//hdr = mtod(m, struct ether_header *);
-		//memcpy(hdr, &nh->hdr, ETHER_HDR_LEN); 
 	}
 
-	printf("no cache and go to if_output\n");
+	//printf("no cache and go to if_output\n");
 
 	/*
 	 * Send the packet on its way.
