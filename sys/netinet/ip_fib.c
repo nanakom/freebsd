@@ -284,8 +284,6 @@ dxr_input(struct mbuf *m)
 	 *
 	 * XXX Lookup structures should be protected somehow...
 	 */
-	if (m->m_flags & M_VALE)
-		printf("%s: start m (%p)\n", __func__, m);
 	nh = &nexthop_tbl[(index = dxr_lookup(dst))];
 	/*
 	printf("in dxr, index = %d, nexthop_tbl = %p, &nexthop_tbl[index] = %p\n", index, nexthop_tbl, nh);
@@ -299,8 +297,6 @@ dxr_input(struct mbuf *m)
 		 */
 		dxr_stats.no_route++;
 		dxr_stats.slowpath++;
-		if (m->m_flags & M_VALE)
-			printf("%s: no dst_ifp, returning m (%p)\n", __func__, m);
 		return m;
 	}
 	m->m_pkthdr.l5hlen = index;
