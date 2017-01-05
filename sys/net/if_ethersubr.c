@@ -314,7 +314,6 @@ ether_output(struct ifnet *ifp, struct mbuf *m,
 			phdr = ro->ro_prepend;
 			hlen = ro->ro_plen;
 		} else if (!(m->m_flags & (M_BCAST | M_MCAST))) {
-			if ((m->m_flags & M_VALE) != 0)
 			if ((ro->ro_flags & RT_LLE_CACHE) != 0) {
 				lle = ro->ro_lle;
 				if (lle != NULL &&
@@ -351,7 +350,6 @@ ether_output(struct ifnet *ifp, struct mbuf *m,
 		senderr(ENETDOWN);
 
 	if (phdr == NULL) {
-		if ((m->m_flags & M_VALE) != 0)
 		/* No prepend data supplied. Try to calculate ourselves. */
 		phdr = linkhdr;
 		hlen = ETHER_HDR_LEN;
