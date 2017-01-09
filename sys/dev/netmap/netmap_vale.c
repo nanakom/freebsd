@@ -78,6 +78,7 @@ __FBSDID("$FreeBSD: head/sys/dev/netmap/netmap.c 257176 2013-10-26 17:58:36Z gle
 #include <net/ethernet.h>
 #include <net/bpf.h>		/* BIOCIMMEDIATE */
 #include <netinet/in.h>
+#include <netinet/in_var.h>
 #include <netinet/ip_fib.h>
 #include <machine/bus.h>	/* bus_dmamap_* */
 #include <sys/endian.h>
@@ -1562,13 +1563,17 @@ netmap_dxr_lookup(struct nm_bdg_fwd *ft, uint8_t *dst_ring,
 	dm.m_data = buf;
 	dm.m_len = dm.m_pkthdr.len = buf_len;
 	m = &dm;
-	//D("before lookup m_data (buf) %p len %u", dm.m_data, buf_len);
-	//ethhdr_print(eh);
+	
+	m->m_flags &= ~M_VLANTAG;
+	m_clrprotoflags(m);
+	m_adj(m, ETHER_HDR_LEN);
 
-	ifp->if_input(ifp, m);
+	ip_input(m);
+
+	//ifp->if_input(ifp, m);
 
 	/* mbuf might not be consumed */
-	eh = (struct ether_header *)buf;
+	//eh = (struct ether_header *)buf;
 	//D("after lookup buf %p m %p m_data %p", buf, m, m ? m->m_data : NULL);
 	//ethhdr_print(eh); 
 	nh = get_nexthop_tbl();
