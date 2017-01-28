@@ -350,6 +350,7 @@ nm_find_bridge(const char *name, int create)
 			b->bdg_port_index[i] = i;
 		/* set the default function */
 		b->bdg_ops.lookup = netmap_dxr_lookup;
++		b->bdg_ops.lookup_batch = netmap_bdg_learning_batch;
 		bzero(&mzero, sizeof(struct mbuf));
 		/* reset the MAC address table */
 		bzero(b->ht, sizeof(struct nm_hash_ent) * NM_BDG_HASH);
@@ -1620,6 +1621,20 @@ netmap_dxr_lookup(struct nm_bdg_fwd *ft, uint8_t *dst_ring,
 	return ret;
 }
 
+void
+netmap_bdg_learning_batch(struct nm_bdg_fwd *ft, u_int n,
+		struct netmap_vp_adapter *na, u_int ring_nr)
+{
+	int i;
+	for (i = 0; i < n; i += ft[i].ft_frags) {
+		struct nm_bdg_fwd *ft_p = ft + i;
+		uint8_t dst_ring = ring_nr;
+
+		ft_p->ft_port = netmap_dxr_lookup(ft_p, &dst_ring, na);
+		ft_p->ft_ring = dst_ring;
+	}
+}
+
 /*
  * Lookup function for a learning bridge.
  * Update the hash table with the source address,
@@ -1775,6 +1790,9 @@ nm_bdg_flush(struct nm_bdg_fwd *ft, u_int n, struct netmap_vp_adapter *na,
 	dst_ents = (struct nm_bdg_q *)(ft + NM_BDG_BATCH_MAX);
 	dsts = (uint16_t *)(dst_ents + NM_BDG_MAXPORTS * NM_BDG_MAXRINGS + 1);
 
+	if (b->bdg_ops.lookup_batch) {
+		b->bdg_ops.lookup_batch(ft, n, na, ring_nr);
+	}
 	/* first pass: find a destination for each packet in the batch */
 	for (i = 0; likely(i < n); i += ft[i].ft_frags) {
 		uint8_t dst_ring = ring_nr; /* default, same ring as origin */
@@ -1786,7 +1804,15 @@ nm_bdg_flush(struct nm_bdg_fwd *ft, u_int n, struct netmap_vp_adapter *na,
 		   fragment nor at the very beginning of the second. */
 		if (unlikely(na->up.virt_hdr_len > ft[i].ft_len))
 			continue;
-		dst_port = b->bdg_ops.lookup(&ft[i], &dst_ring, na);
+		if (b->bdg_ops.lookup_batch) {
+			dst_port = ft[i].ft_port;
+			dst_ring = ft[i].ft_ring;
+			/* ft_port will be used by ft_next. We set ft_ring
+			 * NULL just for sure */
+			ft[i].ft_ring = ft[i].ft_port = NM_FT_NULL;
+		} else {
+			dst_port = b->bdg_ops.lookup(&ft[i], &dst_ring, na);
+		}
 		if (netmap_verbose > 255)
 			RD(5, "slot %d port %d -> %d", i, me, dst_port);
 		if (dst_port == NM_BDG_NOPORT)
