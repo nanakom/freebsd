@@ -350,7 +350,7 @@ nm_find_bridge(const char *name, int create)
 			b->bdg_port_index[i] = i;
 		/* set the default function */
 		b->bdg_ops.lookup = netmap_dxr_lookup;
-+		b->bdg_ops.lookup_batch = netmap_bdg_learning_batch;
+		b->bdg_ops.lookup_batch = netmap_bdg_learning_batch;
 		bzero(&mzero, sizeof(struct mbuf));
 		/* reset the MAC address table */
 		bzero(b->ht, sizeof(struct nm_hash_ent) * NM_BDG_HASH);
