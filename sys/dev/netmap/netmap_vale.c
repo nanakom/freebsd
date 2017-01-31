@@ -1538,7 +1538,7 @@ netmap_dxr_lookup(struct nm_bdg_fwd *ft, uint8_t *dst_ring,
 	struct mbuf dm;
 	u_int ret = NM_BDG_NOPORT;
 	struct dxr_nexthop *nh;
-	uint8_t index;
+	//uint8_t index;
 	
 	/* safety check, unfortunately we have many cases */
 	if (buf_len >= 14 + na->up.virt_hdr_len) {
@@ -1584,9 +1584,9 @@ netmap_dxr_lookup(struct nm_bdg_fwd *ft, uint8_t *dst_ring,
 
 	/* mbuf might not be consumed */
 	nh = get_nexthop_tbl();
-	index = m->m_pkthdr.l5hlen;
-	if (DXR_HDR_CACHE_CLEARED(nh[index].hdr.ether_dhost))
-		nh[index].hdr = *(struct ether_header *)buf;
+	//index = m->m_pkthdr.l5hlen;
+	if (DXR_HDR_CACHE_CLEARED(nh[dxr_cache_index].hdr.ether_dhost))
+		nh[dxr_cache_index].hdr = *(struct ether_header *)buf;
 	
 	/*
 	printf("writing cache, index = %d, nexthop_tbl = %p, &nexthop_tbl[index] = %p\n", index, nh, &nh[index]);

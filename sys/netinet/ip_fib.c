@@ -178,6 +178,8 @@ static int	pending_end;
 
 static int	rdtsc_latency;
 
+uint8_t dxr_cache_index;
+
 #if defined(DXR_LOOKUP_TIMING) || defined(DXR_ITER_TIMING) || defined(RADIX_TIMING)
 static DPCPU_DEFINE(int, valid_timing);
 static int	ex_preload;
@@ -299,7 +301,7 @@ dxr_input(struct mbuf *m)
 		dxr_stats.slowpath++;
 		return m;
 	}
-	m->m_pkthdr.l5hlen = index;
+	dxr_cache_index = index;
 
 	/*
 	 * We are done - dispatch the mbuf and inform the caller that

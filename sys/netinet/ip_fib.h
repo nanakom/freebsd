@@ -47,6 +47,8 @@
 #define DXR_HDR_CACHE_CLEARED(a)	(a[0] & 1)
 #define DXR_HDR_CACHE_CLEAR(a)		(a[0] = 1)
 
+extern uint8_t 	dxr_cache_index;
+
 #include <net/ethernet.h>
 
 struct dxr_nexthop {
