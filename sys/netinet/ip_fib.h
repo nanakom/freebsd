@@ -48,6 +48,7 @@
 #define DXR_HDR_CACHE_CLEAR(a)		(a[0] = 1)
 
 extern uint8_t 	dxr_cache_index;
+extern int nexthops;
 
 #include <net/ethernet.h>
 

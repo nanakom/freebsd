@@ -156,7 +156,7 @@ static int	dxr_enable;
 static int	async_updates;
 static int	updates_pending;
 static int	routes;
-static int	nexthops;
+int	nexthops;
 static int	range_tbl_free;
 static int	nexthop_tbl_size;
 static int	nexthop_head;
