@@ -1537,8 +1537,6 @@ netmap_dxr_lookup(struct nm_bdg_fwd *ft, uint8_t *dst_ring,
 	struct ether_header *eh;
 	struct mbuf dm;
 	u_int ret = NM_BDG_NOPORT;
-	//struct dxr_nexthop *nh;
-	//uint8_t index;
 	
 	/* safety check, unfortunately we have many cases */
 	if (buf_len >= 14 + na->up.virt_hdr_len) {
@@ -1580,16 +1578,8 @@ netmap_dxr_lookup(struct nm_bdg_fwd *ft, uint8_t *dst_ring,
 	
 	/* directly call ip_input() */
 	ip_input(m);
-	//ifp->if_input(ifp, m);
 
 	/* mbuf might not be consumed */
-	
-	/*	
-	nh = get_nexthop_tbl();
-	//index = m->m_pkthdr.l5hlen;
-	if (DXR_HDR_CACHE_CLEARED(nh[dxr_cache_index].hdr.ether_dhost))
-		nh[dxr_cache_index].hdr = *(struct ether_header *)buf;
-	*/
 	
 	/*
 	printf("writing cache, index = %d, nexthop_tbl = %p, &nexthop_tbl[index] = %p\n", index, nh, &nh[index]);
@@ -1650,7 +1640,6 @@ netmap_bdg_learning_batch(struct nm_bdg_fwd *ft, u_int n,
 			buf_len = ft->ft_len;
 		} else {
 			RD(5, "invalid buf format, length %d", buf_len);
-			//return NM_BDG_NOPORT;
 		}
 
 		ft_p->ft_port = netmap_dxr_lookup(ft_p, &dst_ring, na);
@@ -1660,11 +1649,9 @@ netmap_bdg_learning_batch(struct nm_bdg_fwd *ft, u_int n,
 			nh[dxr_cache_index].hdr = *(struct ether_header *)buf;
 		
 	}
-	/*
 	for (i = 0; i < nexthops + 1; i++) {
 		DXR_HDR_CACHE_CLEAR(nh[i].hdr.ether_dhost);
 	}
-	*/
 }
 
 /*
