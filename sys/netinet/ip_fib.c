@@ -563,7 +563,7 @@ dxr_request(struct rtentry *rt, int req)
 	if (dst->sa_family != AF_INET)
 		return;
 
-	RADIX_NODE_HEAD_LOCK_ASSERT(rt_tables_get_rnh(0, AF_INET));
+	RIB_LOCK_ASSERT(rt_tables_get_rnh(0, AF_INET));
 
 	switch(req) {
 	case RTM_DELETE:
@@ -666,7 +666,7 @@ dxr_initheap(dst, chunk)
 	sin->sin_len = sizeof(*sin);
 	sin->sin_addr.s_addr = htonl(dst);
 
-	RADIX_NODE_HEAD_LOCK_ASSERT(rt_tables_get_rnh(0, AF_INET));
+	RIB_LOCK_ASSERT(rt_tables_get_rnh(0, AF_INET));
 	in_rtalloc_ign(&start_ro, RTF_RNH_LOCKED, 0);
 
 	if ((rt = start_ro.ro_rt)) {
@@ -1488,7 +1488,7 @@ apply_pending()
 {
 	uint32_t i, j, mask, bit;
 
-	RADIX_NODE_HEAD_LOCK_ASSERT(rt_tables_get_rnh(0, AF_INET));
+	RIB_LOCK_ASSERT(rt_tables_get_rnh(0, AF_INET));
 
 	for (i = pending_start >> 5; i <= pending_end >> 5; i++) {
 		mask = pending_bitmask[i];
@@ -1509,7 +1509,7 @@ nexthop_ref(struct in_addr gw, struct ifnet *ifp)
 {
 	int16_t nh_i;
 
-	RADIX_NODE_HEAD_LOCK_ASSERT(rt_tables_get_rnh(0, AF_INET));
+	RIB_LOCK_ASSERT(rt_tables_get_rnh(0, AF_INET));
 
 	/* Search for an existing entry */
 	for (nh_i = nexthop_head; nh_i >= 0; nh_i = nexthop_tbl[nh_i].ll_next)
@@ -1550,7 +1550,7 @@ nexthop_unref(uint16_t nh_i)
 {
 	int refc;
 
-	RADIX_NODE_HEAD_LOCK_ASSERT(rt_tables_get_rnh(0, AF_INET));
+	RIB_LOCK_ASSERT(rt_tables_get_rnh(0, AF_INET));
 
 	if ((refc = --nexthop_tbl[nh_i].refcount) == 0) {
 		int16_t prev, next;
