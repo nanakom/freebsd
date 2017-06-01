@@ -1552,36 +1552,22 @@ netmap_dxr_lookup(struct nm_bdg_fwd *ft, uint8_t *dst_ring,
 		ft++;
 		buf = ft->ft_buf;
 		buf_len = ft->ft_len;
-	} else {
-		RD(5, "invalid buf format, length %d", buf_len);
+	} else 
 		return NM_BDG_NOPORT;
-	}
-	RD(2,"start, packet from index=%d", netmap_bdg_idx(na));
-	RD(2,"host_vp = %p, na = %p", netmap_ifp_to_host_vp(ifp), na);
 
-	//host_vp = netmap_ifp_to_host_vp(ifp);
-	if (na == (host_vp = netmap_ifp_to_host_vp(ifp))) {
-		RD(5, "packet from host stack, sendto index = %d", netmap_bdg_idx(na) - 1);
+	if (na == (host_vp = netmap_ifp_to_host_vp(ifp))) 
 		return (netmap_bdg_idx(na) - 1);
-	}
 
 	/* forwarding only ETHERTYPE_IP(0x800) */
 	eh = (struct ether_header *)buf;
-	if (ntohs(eh->ether_type) != ETHERTYPE_IP) {
-		RD(5, "ether_type is not ip, index is =%d",netmap_bdg_idx(host_vp));
+	if (ntohs(eh->ether_type) != ETHERTYPE_IP) 
 		return netmap_bdg_idx(host_vp);
-	}
 
 	hp = buf;
 	hp += sizeof(struct ether_header);
 	iph = (struct ip *)hp;
-	RD(5, "ip_proto = %d", iph->ip_p);
-	if (iph->ip_p != IPPROTO_UDP) {
-		RD(5, "not UDP, return index is = %d", netmap_bdg_idx(host_vp));
+	if (iph->ip_p != IPPROTO_UDP) 
 		return netmap_bdg_idx(host_vp);
-	}
-
-	RD(3,"go to fastpath\n");
 
 	/* create mbuf and set VALE flag */
 	/* XXX: This mbuf structure cannot use some of mbuf
