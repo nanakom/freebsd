@@ -78,6 +78,7 @@ __FBSDID("$FreeBSD: head/sys/dev/netmap/netmap.c 257176 2013-10-26 17:58:36Z gle
 #include <net/ethernet.h>
 #include <net/bpf.h>		/* BIOCIMMEDIATE */
 #include <netinet/in.h>
+#include <netinet/ip.h>
 #include <netinet/in_var.h>
 #include <netinet/ip_fib.h>
 #include <machine/bus.h>	/* bus_dmamap_* */
@@ -1537,6 +1538,9 @@ netmap_dxr_lookup(struct nm_bdg_fwd *ft, uint8_t *dst_ring,
 	struct ether_header *eh;
 	struct mbuf dm;
 	u_int ret = NM_BDG_NOPORT;
+	struct netmap_vp_adapter *host_vp;
+	struct ip *iph;
+	uint8_t *hp;
 	
 	/* safety check, unfortunately we have many cases */
 	if (buf_len >= 14 + na->up.virt_hdr_len) {
@@ -1552,10 +1556,32 @@ netmap_dxr_lookup(struct nm_bdg_fwd *ft, uint8_t *dst_ring,
 		RD(5, "invalid buf format, length %d", buf_len);
 		return NM_BDG_NOPORT;
 	}
+	RD(2,"start, packet from index=%d", netmap_bdg_idx(na));
+	RD(2,"host_vp = %p, na = %p", netmap_ifp_to_host_vp(ifp), na);
+
+	//host_vp = netmap_ifp_to_host_vp(ifp);
+	if (na == (host_vp = netmap_ifp_to_host_vp(ifp))) {
+		RD(5, "packet from host stack, sendto index = %d", netmap_bdg_idx(na) - 1);
+		return (netmap_bdg_idx(na) - 1);
+	}
+
 	/* forwarding only ETHERTYPE_IP(0x800) */
 	eh = (struct ether_header *)buf;
-	if (ntohs(eh->ether_type) != ETHERTYPE_IP)
-		return NM_BDG_NOPORT;
+	if (ntohs(eh->ether_type) != ETHERTYPE_IP) {
+		RD(5, "ether_type is not ip, index is =%d",netmap_bdg_idx(host_vp));
+		return netmap_bdg_idx(host_vp);
+	}
+
+	hp = buf;
+	hp += sizeof(struct ether_header);
+	iph = (struct ip *)hp;
+	RD(5, "ip_proto = %d", iph->ip_p);
+	if (iph->ip_p != IPPROTO_UDP) {
+		RD(5, "not UDP, return index is = %d", netmap_bdg_idx(host_vp));
+		return netmap_bdg_idx(host_vp);
+	}
+
+	RD(3,"go to fastpath\n");
 
 	/* create mbuf and set VALE flag */
 	/* XXX: This mbuf structure cannot use some of mbuf
