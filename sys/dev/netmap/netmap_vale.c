@@ -1558,11 +1558,12 @@ netmap_dxr_lookup(struct nm_bdg_fwd *ft, uint8_t *dst_ring,
 	if (na == (host_vp = netmap_ifp_to_host_vp(ifp))) 
 		return (netmap_bdg_idx(na) - 1);
 
-	/* forwarding only ETHERTYPE_IP(0x800) */
+	/* forwarding to fastpath only ETHERTYPE_IP(0x800) */
 	eh = (struct ether_header *)buf;
 	if (ntohs(eh->ether_type) != ETHERTYPE_IP) 
 		return netmap_bdg_idx(host_vp);
 
+	/* to be fixed to forward TCP packet to fastpath... */
 	hp = buf;
 	hp += sizeof(struct ether_header);
 	iph = (struct ip *)hp;
