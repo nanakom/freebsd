@@ -360,7 +360,10 @@ ether_output(struct ifnet *ifp, struct mbuf *m,
 	 * This is done because BPF code shifts m_data pointer
 	 * to the end of ethernet header prior to calling if_output().
 	 */
-	M_PREPEND(m, hlen, M_NOWAIT);
+	if (m->m_flags & M_VALE) 
+		m->m_data -= hlen;
+	else 
+		M_PREPEND(m, hlen, M_NOWAIT);
 	if (m == NULL)
 		senderr(ENOBUFS);
 	if ((pflags & RT_HAS_HEADER) == 0) {
@@ -456,6 +459,9 @@ ether_output_frame(struct ifnet *ifp, struct mbuf *m)
 	 * Queue message on interface, update output statistics if
 	 * successful, and start output if interface not yet active.
 	 */
+	if (m->m_flags & M_VALE)
+		return (0);
+
 	return ((ifp->if_transmit)(ifp, m));
 }
 
@@ -470,6 +476,11 @@ ether_input_internal(struct ifnet *ifp, struct mbuf *m)
 	u_short etype;
 
 	if ((ifp->if_flags & IFF_UP) == 0) {
+		if (m->m_flags & M_VALE) {
+			printf("%s Oops %s is down!\n", __FUNCTION__, 
+				ifp->if_xname);
+			return;
+		}
 		m_freem(m);
 		return;
 	}
