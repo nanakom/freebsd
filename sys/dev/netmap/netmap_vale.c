@@ -72,10 +72,16 @@ __FBSDID("$FreeBSD$");
 #include <sys/rwlock.h>
 #include <sys/socket.h> /* sockaddrs */
 #include <sys/selinfo.h>
+#include <sys/systm.h>
 #include <sys/sysctl.h>
 #include <net/if.h>
 #include <net/if_var.h>
+#include <net/ethernet.h>
 #include <net/bpf.h>		/* BIOCIMMEDIATE */
+#include <netinet/in.h>
+#include <netinet/ip.h>
+#include <netinet/in_var.h>
+#include <netinet/ip_fib.h>
 #include <machine/bus.h>	/* bus_dmamap_* */
 #include <sys/endian.h>
 #include <sys/refcount.h>
@@ -155,6 +161,7 @@ __FBSDID("$FreeBSD$");
  * used in the bridge. The actual value may be larger as the
  * last packet in the block may overflow the size.
  */
+static struct mbuf mzero;
 static int bridge_batch = NM_BDG_BATCH; /* bridge batch size */
 SYSBEGIN(vars_vale);
 SYSCTL_DECL(_dev_netmap);
@@ -371,7 +378,11 @@ nm_find_bridge(const char *name, int create)
 		for (i = 0; i < NM_BDG_MAXPORTS; i++)
 			b->bdg_port_index[i] = i;
 		/* set the default function */
-		b->bdg_ops.lookup = netmap_bdg_learning;
+		//b->bdg_ops.lookup = netmap_bdg_learning;
+		b->bdg_ops.lookup = netmap_dxr_lookup;
+		b->bdg_ops.lookup_batch = netmap_bdg_learning_batch;
+		bzero(&mzero, sizeof(struct mbuf));
+
 		/* reset the MAC address table */
 		bzero(b->ht, sizeof(struct nm_hash_ent) * NM_BDG_HASH);
 		NM_BNS_GET(b);
@@ -1604,6 +1615,131 @@ netmap_vp_reg(struct netmap_adapter *na, int onoff)
 	return 0;
 }
 
+/* Lookup function for L3 routing only IPv4 */
+u_int
+netmap_dxr_lookup(struct nm_bdg_fwd *ft, uint8_t *dst_ring,
+		struct netmap_vp_adapter *na)
+{
+	uint8_t *buf = ft->ft_buf;
+	u_int buf_len = ft->ft_len;
+	struct mbuf *m;
+	struct ifnet *dst_ifp, *ifp = netmap_vp_to_ifp(na);
+	struct ether_header *eh;
+	struct mbuf dm;
+	u_int ret = NM_BDG_NOPORT;
+	struct netmap_vp_adapter *host_vp;
+
+	/* safety check, unfortunately we have many cases */
+	if (buf_len >= 14 + na->up.virt_hdr_len) {
+		/* virthdr + mac_hdr in the same slot */
+		buf += na->up.virt_hdr_len;
+		buf_len -= na->up.virt_hdr_len;
+	} else if (buf_len == na->up.virt_hdr_len && ft->ft_flags & NS_MOREFRAG) {
+		/* only header in first fragment */
+		ft++;
+		buf = ft->ft_buf;
+		buf_len = ft->ft_len;
+	} else 
+		return ret;
+
+	/* forwarding the packet from host stack to nic */
+	if (na == (host_vp = netmap_ifp_to_host_vp(ifp)))
+		return (netmap_bdg_idx(na) - 1);
+
+
+	/* create mbuf and set VALE flag */
+	/* XXX: This mbuf structure cannot use some of mbuf
+	 * related functions. (including m_start)  to be fixed...
+	 */ 
+	dm = mzero;
+	dm.m_flags |= (M_VALE | M_PKTHDR);
+	dm.m_pkthdr.rcvif = ifp;
+	dm.m_data = buf;
+	dm.m_len = dm.m_pkthdr.len = buf_len;
+	m = &dm;
+	
+	/* forwarding to fastpath only ETHERTYPE_IP(0x800) */
+	eh = (struct ether_header *)buf;
+	if (ntohs(eh->ether_type) == ETHERTYPE_IP) { 
+	/*
+	 * Reset layer specific mbuf flags to avoid confusing upper layers.
+	 * Strip off Ethernet header.
+	 */
+		m->m_flags &= ~M_VLANTAG;
+		m_clrprotoflags(m);
+		m_adj(m, ETHER_HDR_LEN);
+		/* directly call ip_input() for fastpath */
+		ip_input(m);
+		dst_ifp = (struct ifnet *)m->m_pkthdr.PH_loc.ptr;
+
+		if ((!dst_ifp) || (m->m_flags & M_CONSUMED))
+			return ret;
+
+		if (!(dst_ifp->if_capenable & IFCAP_NETMAP /* XXX */)) {
+			D("dst_ifp %s is not netmap mode", dst_ifp->if_xname);
+		} else if (netmap_ifp_to_vp(dst_ifp) == NULL) {
+			D("dst_ifp %s is not on a VALE switch", dst_ifp->if_xname);
+		} else if (netmap_ifp_to_vp(dst_ifp)->na_bdg != na->na_bdg) {
+			RD(1, "dst_ifp %s is on different switch", dst_ifp->if_xname);
+		} else {
+			if (unlikely((uint8_t *)m->m_data != buf))
+				m_copydata(m, 0, MBUF_LEN(m), buf);
+			ret = netmap_bdg_idx(netmap_ifp_to_vp(dst_ifp));
+		}
+	} else {
+		/* allocate mbuf officially and going slowpath */
+		m = m_devget(buf, buf_len, 0, ifp, NULL);
+		m->m_flags |= M_CONSUMED;
+		ifp->if_input(ifp,m);
+	}
+
+	return ret;
+
+}
+
+/* batching packets before calling L2/L3 functions */
+void
+netmap_bdg_learning_batch(struct nm_bdg_fwd *ft, u_int n,
+		struct netmap_vp_adapter *na, u_int ring_nr)
+{
+	int i;
+	struct dxr_nexthop *nh = get_nexthop_tbl();
+
+	RD(1,"batch function start");
+
+	for (i = 0; i < n; i += ft[i].ft_frags) {
+		struct nm_bdg_fwd *ft_p = ft + i;
+		uint8_t dst_ring = ring_nr;
+		uint8_t *buf = ft_p->ft_buf;
+		u_int buf_len = ft_p->ft_len;
+
+		/* safety check, unfortunately we have many cases */
+		
+		if (buf_len >= 14 + na->up.virt_hdr_len) {
+			/* virthdr + mac_hdr in the same slot */
+			buf += na->up.virt_hdr_len;
+			buf_len -= na->up.virt_hdr_len;
+		} else if (buf_len == na->up.virt_hdr_len && ft->ft_flags & NS_MOREFRAG) {
+			/* only header in first fragment */
+			ft++;
+			buf = ft->ft_buf;
+			buf_len = ft->ft_len;
+		} else {
+			RD(5, "invalid buf format, length %d", buf_len);
+		}
+
+		ft_p->ft_port = netmap_dxr_lookup(ft_p, &dst_ring, na);
+		ft_p->ft_ring = dst_ring;
+			
+		if (DXR_HDR_CACHE_CLEARED(nh[dxr_cache_index].hdr.ether_dhost))
+			nh[dxr_cache_index].hdr = *(struct ether_header *)buf;
+		
+	}
+	for (i = 0; i < nexthops + 1; i++) {
+		DXR_HDR_CACHE_CLEAR(nh[i].hdr.ether_dhost);
+	}
+}
+
 
 /*
  * Lookup function for a learning bridge.
@@ -1769,6 +1905,10 @@ nm_bdg_flush(struct nm_bdg_fwd *ft, u_int n, struct netmap_vp_adapter *na,
 	dst_ents = (struct nm_bdg_q *)(ft + NM_BDG_BATCH_MAX);
 	dsts = (uint16_t *)(dst_ents + NM_BDG_MAXPORTS * NM_BDG_MAXRINGS + 1);
 
+	if (b->bdg_ops.lookup_batch) {
+		b->bdg_ops.lookup_batch(ft, n, na, ring_nr);
+	}
+
 	/* first pass: find a destination for each packet in the batch */
 	for (i = 0; likely(i < n); i += ft[i].ft_frags) {
 		uint8_t dst_ring = ring_nr; /* default, same ring as origin */
@@ -1780,7 +1920,15 @@ nm_bdg_flush(struct nm_bdg_fwd *ft, u_int n, struct netmap_vp_adapter *na,
 		   fragment nor at the very beginning of the second. */
 		if (unlikely(na->up.virt_hdr_len > ft[i].ft_len))
 			continue;
-		dst_port = b->bdg_ops.lookup(&ft[i], &dst_ring, na);
+		if (b->bdg_ops.lookup_batch) {
+			dst_port = ft[i].ft_port;
+			dst_ring = ft[i].ft_ring;
+			/* ft_port will be used by ft_next. We set ft_ring
+			 * NULL just for sure */
+			ft[i].ft_ring = ft[i].ft_port = NM_FT_NULL;
+		} else {
+			dst_port = b->bdg_ops.lookup(&ft[i], &dst_ring, na);
+		}
 		if (netmap_verbose > 255)
 			RD(5, "slot %d port %d -> %d", i, me, dst_port);
 		if (dst_port == NM_BDG_NOPORT)

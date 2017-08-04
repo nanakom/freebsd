@@ -69,6 +69,7 @@ __FBSDID("$FreeBSD$");
 #include <netinet/in_kdtrace.h>
 #include <netinet/in_systm.h>
 #include <netinet/in_var.h>
+#include <netinet/ip_fib.h>
 #include <netinet/ip.h>
 #include <netinet/in_pcb.h>
 #include <netinet/ip_var.h>
@@ -569,6 +570,10 @@ tooshort:
 	    ) {
 		if ((m = ip_tryforward(m)) == NULL)
 			return;
+		if ((m->m_flags & M_VALE) && (!(m->m_flags & M_CONSUMED))) {
+			m->m_flags |= M_CONSUMED;
+			m = m_devget(m->m_data, m->m_len, 0, m->m_pkthdr.rcvif, NULL);
+		}
 		if (m->m_flags & M_FASTFWD_OURS) {
 			m->m_flags &= ~M_FASTFWD_OURS;
 			ip = mtod(m, struct ip *);

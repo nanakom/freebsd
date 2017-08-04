@@ -150,7 +150,9 @@ struct rtentry {
 	struct	ifaddr *rt_ifa;		/* the answer: interface address to use */
 	int		rt_flags;	/* up/down?, host/net */
 	int		rt_refcnt;	/* # held references */
-	u_int		rt_fibnum;	/* which FIB */
+	//u_int		rt_fibnum;	/* which FIB */
+	uint16_t	rt_fibnum;	/* which FIB */
+	uint16_t	rt_dxr_nexthop;	/* DXR nexthop (dst_ifnet, dst_ip) */ 
 	u_long		rt_mtu;		/* MTU for this path */
 	u_long		rt_weight;	/* absolute weight */ 
 	u_long		rt_expire;	/* lifetime for route, e.g. redirect */
