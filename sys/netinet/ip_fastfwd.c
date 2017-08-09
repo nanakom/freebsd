@@ -295,8 +295,16 @@ passin:
 	/*
 	 * Find route to destination.
 	 */
-	if (ip_findroute(&nh, dest, m) != 0)
-		return (NULL);	/* icmp unreach already sent */
+	if (dxr_input(m) == NULL)
+		return NULL;
+	else { 
+		if ((m->m_flags & M_VALE) && (!(m->m_flags & M_CONSUMED))) {
+			m->m_flags |= M_CONSUMED;
+			m = m_devget(m->m_data, m->m_len, 0, m->m_pkthdr.rcvif, NULL);
+		}
+		if (ip_findroute(&nh, dest, m) != 0)
+			return (NULL);	/* icmp unreach already sent */
+	}
 
 	/*
 	 * Step 5: outgoing firewall packet processing
@@ -341,8 +349,16 @@ forwardlocal:
 			m_tag_delete(m, fwd_tag);
 			m->m_flags &= ~M_IP_NEXTHOP;
 		}
-		if (ip_findroute(&nh, dest, m) != 0)
-			return (NULL);	/* icmp unreach already sent */
+		if (dxr_input(m) == NULL)
+			return NULL;
+		else { 
+			if ((m->m_flags & M_VALE) && (!(m->m_flags & M_CONSUMED))) {
+				m->m_flags |= M_CONSUMED;
+				m = m_devget(m->m_data, m->m_len, 0, m->m_pkthdr.rcvif, NULL);
+			}
+			if (ip_findroute(&nh, dest, m) != 0)
+				return (NULL);	/* icmp unreach already sent */
+		}
 	}
 
 passout:
