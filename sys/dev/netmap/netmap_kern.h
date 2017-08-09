@@ -1434,15 +1434,22 @@ int netmap_get_hw_na(struct ifnet *ifp,
  */
 typedef u_int (*bdg_lookup_fn_t)(struct nm_bdg_fwd *ft, uint8_t *ring_nr,
 		struct netmap_vp_adapter *);
+typedef void (*bdg_lookup_batch_fn_t)(struct nm_bdg_fwd *ft, u_int n,
+		struct netmap_vp_adapter *, u_int);
 typedef int (*bdg_config_fn_t)(struct nm_ifreq *);
 typedef void (*bdg_dtor_fn_t)(const struct netmap_vp_adapter *);
 struct netmap_bdg_ops {
 	bdg_lookup_fn_t lookup;
+	bdg_lookup_batch_fn_t lookup_batch;
 	bdg_config_fn_t config;
 	bdg_dtor_fn_t	dtor;
 };
 
 u_int netmap_bdg_learning(struct nm_bdg_fwd *ft, uint8_t *dst_ring,
+		struct netmap_vp_adapter *);
+void netmap_bdg_learning_batch(struct nm_bdg_fwd *, u_int,
+		struct netmap_vp_adapter *, u_int);
+u_int netmap_dxr_lookup(struct nm_bdg_fwd *ft, uint8_t *dst_ring,
 		struct netmap_vp_adapter *);
 
 #define	NM_BRIDGES		8	/* number of bridges */
