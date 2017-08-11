@@ -380,8 +380,8 @@ nm_find_bridge(const char *name, int create)
 		/* set the default function */
 		//b->bdg_ops.lookup = netmap_bdg_learning;
 		b->bdg_ops.lookup = netmap_dxr_lookup;
-		b->bdg_ops.lookup.batch = netmap_bdg_learning_batch;
-		bzero(&mzero, sieof(struct mbuf));
+		b->bdg_ops.lookup_batch = netmap_bdg_learning_batch;
+		bzero(&mzero, sizeof(struct mbuf));
 
 		/* reset the MAC address table */
 		bzero(b->ht, sizeof(struct nm_hash_ent) * NM_BDG_HASH);

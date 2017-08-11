@@ -95,9 +95,10 @@
 #include <net/ethernet.h>
 
 #include <netinet/in.h>
+#include <netinet/in_fib.h>
 #include <netinet/in_systm.h>
-#include <netinet/ip.h>
 #include <netinet/in_var.h>
+#include <netinet/ip.h>
 #include <netinet/ip_var.h>
 #include <netinet/ip_fib.h>
 #include <netinet/ip_icmp.h>
@@ -1892,6 +1893,7 @@ sysctl_dxr_readentry(SYSCTL_HANDLER_ARGS)
 		struct in_addr gw;
 		char *c = index(&buf[0], '.');
 		int chunk = strtol(&buf[0], 0, 0);
+		char addrbuf[INET_ADDRSTRLEN];
 
 		if (chunk >= DIRECT_TBL_SIZE)
 			return ERANGE;
@@ -1934,7 +1936,7 @@ sysctl_dxr_readentry(SYSCTL_HANDLER_ARGS)
 		if (ifp)  {
 			next += sprintf(&buf[next], "%s", ifp->if_xname);
 			if (gw.s_addr)
-				sprintf(&buf[next], " %s", inet_ntoa(gw));
+				sprintf(&buf[next], " %s", inet_ntoa_r(gw, addrbuf));
 		} else
 			sprintf(&buf[next], "DISCARD");
 		count = 2;
@@ -2225,6 +2227,7 @@ dxr_heap_dump(void)
 	struct ifnet *ifp;
 	struct in_addr gw;
 	int i;
+	char addrbuf[INET_ADDRSTRLEN];
 
 	for (i = 0; i <= heap_index; i++, fhp++) {
 		int nh = fhp->nexthop;
@@ -2236,7 +2239,7 @@ dxr_heap_dump(void)
 		if (ifp != NULL) {
 			printf("%s", ifp->if_xname);
 			if (gw.s_addr)
-				printf("/%s", inet_ntoa(gw));
+				printf("/%s", inet_ntoa_r(gw, addrbuf));
 		} else
 			printf("DISCARD");
 		printf("\n");
@@ -2252,6 +2255,7 @@ dxr_chunk_dump(int chunk)
 	struct ifnet *ifp;
 	struct in_addr gw;
 	int i, nh;
+	char addrbuf[INET_ADDRSTRLEN];
 
 	for (i = 0; i <= fdesc->fragments; i++) {
 		if (fdesc->long_format) {
@@ -2268,7 +2272,7 @@ dxr_chunk_dump(int chunk)
 		if (ifp != NULL) {
 			printf("%s", ifp->if_xname);
 			if (gw.s_addr)
-				printf("/%s", inet_ntoa(gw));
+				printf("/%s", inet_ntoa_r(gw, addrbuf));
 		} else
 			printf("DISCARD");
 		printf("\n");
@@ -2283,8 +2287,9 @@ print_in_route(struct rtentry *rt, const char *txt)
 	struct sockaddr *gw = rt->rt_gateway;
 	int preflen, i;
 	u_char *c;
+	char addrbuf[INET_ADDRSTRLEN];
 
-	printf("%s: %s", txt, inet_ntoa(dst->sin_addr));
+	printf("%s: %s", txt, inet_ntoa_r((dst->sin_addr), addrbuf));
 	if (mask) {
 		preflen = ffs(ntohl(mask->sin_addr.s_addr));
 		if (preflen)
@@ -2306,7 +2311,7 @@ print_in_route(struct rtentry *rt, const char *txt)
 			}
 			break;
 		case AF_INET:
-			printf("/%s", inet_ntoa(SIN(gw)->sin_addr));
+			printf("/%s", inet_ntoa_r((SIN(gw)->sin_addr), addrbuf));
 			break;
 		default:
 			printf("/??");
@@ -2371,9 +2376,10 @@ dir_24_8_lookup(uint32_t dst)
 	if (nh != check_nh) {
 		struct ifnet *ifp;
 		struct in_addr gw;
+		char addrbuf[INET_ADDRSTRLEN];
 
 		gw.s_addr = htonl(dst);
-		printf("%s:", inet_ntoa(gw));
+		printf("%s:", inet_ntoa_r(gw, addrbuf));
 
 		printf(" DIR_24_8: ");
 		ifp = nexthop_tbl[nh].ifp;
@@ -2381,7 +2387,7 @@ dir_24_8_lookup(uint32_t dst)
 		if (ifp)  {
 			printf("%s", ifp->if_xname);
 			if (gw.s_addr)
-				printf(" %s", inet_ntoa(gw));
+				printf(" %s", inet_ntoa_r(gw, addrbuf));
 		} else
 			printf("DISCARD");
 
@@ -2391,7 +2397,7 @@ dir_24_8_lookup(uint32_t dst)
 		if (ifp)  {
 			printf("%s", ifp->if_xname);
 			if (gw.s_addr)
-				printf(" %s", inet_ntoa(gw));
+				printf(" %s", inet_ntoa_r(gw, addrbuf));
 		} else
 			printf("DISCARD");
 		printf("\n");
