@@ -1628,6 +1628,8 @@ netmap_dxr_lookup(struct nm_bdg_fwd *ft, uint8_t *dst_ring,
 	struct mbuf dm;
 	u_int ret = NM_BDG_NOPORT;
 	struct netmap_vp_adapter *host_vp;
+
+	RD(1,"dxr_lookup function called");
 	
 	/* safety check, unfortunately we have many cases */
 	if (buf_len >= 14 + na->up.virt_hdr_len) {
@@ -1643,8 +1645,12 @@ netmap_dxr_lookup(struct nm_bdg_fwd *ft, uint8_t *dst_ring,
 		return ret;
 
 	/* forwarding the packet from host stack to nic */
-	if (na == (host_vp = netmap_ifp_to_host_vp(ifp))) 
+	if (na == (host_vp = netmap_ifp_to_host_vp(ifp))) {
+		RD(1,"forwarding the packet from host stack to nic");
 		return (netmap_bdg_idx(na) - 1);
+	}
+
+	RD(1,"create mbuf and set VALE flag");
 
 	/* create mbuf and set VALE flag */
 	/* XXX: This mbuf structure cannot use some of mbuf
@@ -1664,15 +1670,19 @@ netmap_dxr_lookup(struct nm_bdg_fwd *ft, uint8_t *dst_ring,
 	 * Reset layer specific mbuf flags to avoid confusing upper layers.
 	 * Strip off Ethernet header.
 	 */
+		RD(1,"Is it fastpath?");
 		m->m_flags &= ~M_VLANTAG;
 		m_clrprotoflags(m);
 		m_adj(m, ETHER_HDR_LEN);
 		/* directly call ip_input() for fastpath */
 		ip_input(m);
+		RD(1,"return from ip_input()");
 		dst_ifp = (struct ifnet *)m->m_pkthdr.PH_loc.ptr;
 
-		if ((!dst_ifp) || (m->m_flags & M_CONSUMED))
+		if ((!dst_ifp) || (m->m_flags & M_CONSUMED)) {
+			RD(1,"packet is consumed");
 			return ret;
+		}
 
 		if (!(dst_ifp->if_capenable & IFCAP_NETMAP /* XXX */)) {
 			D("dst_ifp %s is not netmap mode", dst_ifp->if_xname);
@@ -1687,10 +1697,13 @@ netmap_dxr_lookup(struct nm_bdg_fwd *ft, uint8_t *dst_ring,
 		}
 	} else {
 		/* allocate mbuf officially and going slowpath */
+		RD(1,"Is it slowpath?");
 		m = m_devget(buf, buf_len, 0, ifp, NULL);
 		m->m_flags |= M_CONSUMED;
 		ifp->if_input(ifp,m);
 	}
+
+	RD(1,"check return value = %d", ret);
 
 	return ret;
 
@@ -1703,6 +1716,8 @@ netmap_bdg_learning_batch(struct nm_bdg_fwd *ft, u_int n,
 {
 	int i;
 	struct dxr_nexthop *nh = get_nexthop_tbl();
+
+	RD(1,"batch function start");
 
 	for (i = 0; i < n; i += ft[i].ft_frags) {
 		struct nm_bdg_fwd *ft_p = ft + i;
@@ -1901,6 +1916,10 @@ nm_bdg_flush(struct nm_bdg_fwd *ft, u_int n, struct netmap_vp_adapter *na,
 	 */
 	dst_ents = (struct nm_bdg_q *)(ft + NM_BDG_BATCH_MAX);
 	dsts = (uint16_t *)(dst_ents + NM_BDG_MAXPORTS * NM_BDG_MAXRINGS + 1);
+
+	if (b->bdg_ops.lookup_batch) {
+		b->bdg_ops.lookup_batch(ft, n, na, ring_nr);
+	}
 
 	/* first pass: find a destination for each packet in the batch */
 	for (i = 0; likely(i < n); i += ft[i].ft_frags) {
