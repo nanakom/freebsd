@@ -153,6 +153,8 @@ ip_tryforward(struct mbuf *m)
 	struct nhop4_basic nh;
 	struct sockaddr_in dst;
 	struct in_addr odest, dest;
+	struct dxr_nexthop *dnh = NULL;
+	struct ether_header *hdr = NULL;
 	uint16_t ip_len, ip_off;
 	int error = 0;
 	struct m_tag *fwd_tag = NULL;
@@ -295,9 +297,7 @@ passin:
 	/*
 	 * Find route to destination.
 	 */
-	if (dxr_input(m) == NULL)
-		return NULL;
-	else { 
+	if (dxr_input(&nh, dest, m, dnh) != NULL) {
 		if ((m->m_flags & M_VALE) && (!(m->m_flags & M_CONSUMED))) {
 			m->m_flags |= M_CONSUMED;
 			m = m_devget(m->m_data, m->m_len, 0, m->m_pkthdr.rcvif, NULL);
@@ -349,9 +349,7 @@ forwardlocal:
 			m_tag_delete(m, fwd_tag);
 			m->m_flags &= ~M_IP_NEXTHOP;
 		}
-		if (dxr_input(m) == NULL)
-			return NULL;
-		else { 
+		if (dxr_input(&nh, dest, m, dnh) != NULL) {
 			if ((m->m_flags & M_VALE) && (!(m->m_flags & M_CONSUMED))) {
 				m->m_flags |= M_CONSUMED;
 				m = m_devget(m->m_data, m->m_len, 0, m->m_pkthdr.rcvif, NULL);
@@ -365,6 +363,15 @@ passout:
 	/*
 	 * Step 6: send off the packet
 	 */
+
+	/* bypass ethernet_output routine */
+	if ((m->m_flags & M_VALE) && !(DXR_HDR_CACHE_CLEARED(dnh->hdr.ether_dhost))) {
+		hdr = (struct ether_header *)(m->m_data - ETHER_HDR_LEN);
+		*hdr = dnh->hdr;
+		m->m_data -= ETHER_HDR_LEN;
+		return (NULL);
+	}
+
 	ip_len = ntohs(ip->ip_len);
 	ip_off = ntohs(ip->ip_off);
 

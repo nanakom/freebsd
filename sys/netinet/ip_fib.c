@@ -272,15 +272,13 @@ void ethhdr_print(struct ether_header *eh)
 */
 
 struct mbuf *
-dxr_input(struct mbuf *m)
+dxr_input(struct nhop4_basic *pnh, struct in_addr dest, struct mbuf *m, struct dxr_nexthop *nh)
 {
-	struct ip *ip = mtod(m, struct ip *);
-	struct dxr_nexthop *nh;
-	struct ifnet *dst_ifp;
 	uint32_t dst;
 	uint8_t index;
 
-	dst = ntohl(ip->ip_dst.s_addr);
+	bzero(pnh, sizeof(*pnh));
+	dst = dest.s_addr;
 
 	/*
 	 * Find the nexthop.
@@ -293,8 +291,9 @@ dxr_input(struct mbuf *m)
 	for (i = 0; i < 10; i++)
 		printf("in dxr, i = %d, nexthop_tbl[%d].gw = %d\n", i, i, ntohl(nexthop_tbl[i].gw.s_addr)); 
 	*/
-	dst_ifp = nh->ifp;
-	if (dst_ifp == NULL) {
+	//dst_ifp = nh->ifp;
+	pnh->nh_ifp = nh->ifp;
+	if (pnh->nh_ifp == NULL) {
 		/*
 		 * Don't just drop the packet, need to send an ICMP unreachable
 		 */
@@ -302,13 +301,22 @@ dxr_input(struct mbuf *m)
 		dxr_stats.slowpath++;
 		return m;
 	}
+	pnh->nh_mtu = nh->ifp->if_mtu;
+	if (nh->gw.s_addr)
+		pnh->nh_addr.s_addr = ntohl(nh->gw.s_addr);
+	else
+		pnh->nh_addr.s_addr = ntohl(dest.s_addr);
+
 	dxr_cache_index = index;
+
+	if (m->m_flags & M_VALE) {
+		m->m_pkthdr.PH_loc.ptr = pnh->nh_ifp; /* save destination */
+	}
 
 	/*
 	 * We are done - dispatch the mbuf and inform the caller that
 	 * our packet was consumed.
 	 */
-	dxr_output(m, nh);
 	return NULL;
 }
 
@@ -331,9 +339,6 @@ dxr_output(struct mbuf *m, struct dxr_nexthop *nh)
 	dst_sin.sin_family = AF_INET;
 	dst_sin.sin_len = sizeof(dst);
 
-	if (m->m_flags & M_VALE) {
-		m->m_pkthdr.PH_loc.ptr = dst_ifp; /* save destination */
-	}
 	/*
 	 * Check if media link state of interface is not down
 	 */
