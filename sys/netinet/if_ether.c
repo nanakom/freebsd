@@ -585,6 +585,7 @@ arpresolve_addr(struct ifnet *ifp, int flags, const struct sockaddr *dst,
 
 	flags |= LLE_ADDRONLY;
 	error = arpresolve_full(ifp, 0, flags, NULL, dst, desten, pflags, plle);
+	//printf("in arpresolve_addr, error = %d", error); //for debug
 	return (error);
 }
 
@@ -656,6 +657,7 @@ arpresolve(struct ifnet *ifp, int is_gw, struct mbuf *m,
 		LLE_WUNLOCK(la);
 	IF_AFDATA_RUNLOCK(ifp);
 
+	//printf("in arpresolve, call arpresolve_full\n"); //for debug
 	return (arpresolve_full(ifp, is_gw, la == NULL ? LLE_CREATE : 0, m, dst,
 	    desten, pflags, plle));
 }

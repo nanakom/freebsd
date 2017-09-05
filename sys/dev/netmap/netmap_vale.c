@@ -173,6 +173,8 @@ static int netmap_vp_create(struct nmreq *, struct ifnet *,
 static int netmap_vp_reg(struct netmap_adapter *na, int onoff);
 static int netmap_bwrap_reg(struct netmap_adapter *, int onoff);
 
+static void ethhdr_print(struct ether_header *);
+
 /*
  * For each output interface, nm_bdg_q is used to construct a list.
  * bq_len is the number of output buffers (we can have coalescing
@@ -1615,6 +1617,19 @@ netmap_vp_reg(struct netmap_adapter *na, int onoff)
 	return 0;
 }
 
+/* function for debugging, erase it later */
+void
+ethhdr_print(struct ether_header *eh)
+{
+	printf("Dst_mac %02x:%02x:%02x:%02x:%02x:%02x ",
+			eh->ether_dhost[0], eh->ether_dhost[1], eh->ether_dhost[2],
+			eh->ether_dhost[3], eh->ether_dhost[4], eh->ether_dhost[5]);
+	printf("Src_mac %02x:%02x:%02x:%02x:%02x:%02x ",
+			eh->ether_shost[0], eh->ether_shost[1], eh->ether_shost[2],
+			eh->ether_shost[3], eh->ether_shost[4], eh->ether_shost[5]);
+	printf("Ether_type %04x\n", ntohs(eh->ether_type));
+}
+
 /* Lookup function for L3 routing only IPv4 */
 u_int
 netmap_dxr_lookup(struct nm_bdg_fwd *ft, uint8_t *dst_ring,
@@ -1629,8 +1644,6 @@ netmap_dxr_lookup(struct nm_bdg_fwd *ft, uint8_t *dst_ring,
 	u_int ret = NM_BDG_NOPORT;
 	struct netmap_vp_adapter *host_vp;
 
-	RD(1,"dxr_lookup function called");
-	
 	/* safety check, unfortunately we have many cases */
 	if (buf_len >= 14 + na->up.virt_hdr_len) {
 		/* virthdr + mac_hdr in the same slot */
@@ -1646,11 +1659,9 @@ netmap_dxr_lookup(struct nm_bdg_fwd *ft, uint8_t *dst_ring,
 
 	/* forwarding the packet from host stack to nic */
 	if (na == (host_vp = netmap_ifp_to_host_vp(ifp))) {
-		RD(1,"forwarding the packet from host stack to nic");
+		//RD(1,"forwarding the packet from host stack to nic");
 		return (netmap_bdg_idx(na) - 1);
 	}
-
-	RD(1,"create mbuf and set VALE flag");
 
 	/* create mbuf and set VALE flag */
 	/* XXX: This mbuf structure cannot use some of mbuf
@@ -1670,17 +1681,15 @@ netmap_dxr_lookup(struct nm_bdg_fwd *ft, uint8_t *dst_ring,
 	 * Reset layer specific mbuf flags to avoid confusing upper layers.
 	 * Strip off Ethernet header.
 	 */
-		RD(1,"Is it fastpath?");
 		m->m_flags &= ~M_VLANTAG;
 		m_clrprotoflags(m);
 		m_adj(m, ETHER_HDR_LEN);
 		/* directly call ip_input() for fastpath */
 		ip_input(m);
-		RD(1,"return from ip_input()");
 		dst_ifp = (struct ifnet *)m->m_pkthdr.PH_loc.ptr;
 
 		if ((!dst_ifp) || (m->m_flags & M_CONSUMED)) {
-			RD(1,"packet is consumed");
+			RD(3,"packet is consumed");
 			return ret;
 		}
 
@@ -1697,14 +1706,11 @@ netmap_dxr_lookup(struct nm_bdg_fwd *ft, uint8_t *dst_ring,
 		}
 	} else {
 		/* allocate mbuf officially and going slowpath */
-		RD(1,"Is it slowpath?");
 		m = m_devget(buf, buf_len, 0, ifp, NULL);
 		m->m_flags |= M_CONSUMED;
 		ifp->if_input(ifp,m);
 	}
-
-	RD(1,"check return value = %d", ret);
-
+	
 	return ret;
 
 }
@@ -1716,8 +1722,6 @@ netmap_bdg_learning_batch(struct nm_bdg_fwd *ft, u_int n,
 {
 	int i;
 	struct dxr_nexthop *nh = get_nexthop_tbl();
-
-	RD(1,"batch function start");
 
 	for (i = 0; i < n; i += ft[i].ft_frags) {
 		struct nm_bdg_fwd *ft_p = ft + i;

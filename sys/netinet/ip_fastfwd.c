@@ -293,17 +293,21 @@ passin:
 #ifdef IPSTEALTH
 	}
 #endif
+	printf("start lookup in ip_tryforward\n");
 
 	/*
 	 * Find route to destination.
 	 */
 	if (dxr_input(&nh, dest, m, dnh) != NULL) {
+		printf("dxr_input failed, mbuf will be allocated\n"); //for debug
 		if ((m->m_flags & M_VALE) && (!(m->m_flags & M_CONSUMED))) {
 			m->m_flags |= M_CONSUMED;
 			m = m_devget(m->m_data, m->m_len, 0, m->m_pkthdr.rcvif, NULL);
 		}
-		if (ip_findroute(&nh, dest, m) != 0)
+		if (ip_findroute(&nh, dest, m) != 0) {
+			printf("ip_findroute failed\n"); //for debug
 			return (NULL);	/* icmp unreach already sent */
+		}
 	}
 
 	/*

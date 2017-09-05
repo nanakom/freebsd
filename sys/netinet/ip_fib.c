@@ -277,8 +277,13 @@ dxr_input(struct nhop4_basic *pnh, struct in_addr dest, struct mbuf *m, struct d
 	uint32_t dst;
 	uint8_t index;
 
+	printf("dxr_input start\n");
+
 	bzero(pnh, sizeof(*pnh));
 	dst = dest.s_addr;
+
+	printf("destination is ");
+	addr_print(dst);
 
 	/*
 	 * Find the nexthop.
@@ -286,11 +291,12 @@ dxr_input(struct nhop4_basic *pnh, struct in_addr dest, struct mbuf *m, struct d
 	 * XXX Lookup structures should be protected somehow...
 	 */
 	nh = &nexthop_tbl[(index = dxr_lookup(dst))];
-	/*
+	
 	printf("in dxr, index = %d, nexthop_tbl = %p, &nexthop_tbl[index] = %p\n", index, nexthop_tbl, nh);
-	for (i = 0; i < 10; i++)
-		printf("in dxr, i = %d, nexthop_tbl[%d].gw = %d\n", i, i, ntohl(nexthop_tbl[i].gw.s_addr)); 
-	*/
+	for (int i = 0; i < 10; i++) {
+		printf("in dxr, i = %d, nexthop_tbl[%d].gw = ", i, i); 
+		addr_print(nexthop_tbl[i].gw.s_addr);
+	}
 	//dst_ifp = nh->ifp;
 	pnh->nh_ifp = nh->ifp;
 	if (pnh->nh_ifp == NULL) {
@@ -302,10 +308,16 @@ dxr_input(struct nhop4_basic *pnh, struct in_addr dest, struct mbuf *m, struct d
 		return m;
 	}
 	pnh->nh_mtu = nh->ifp->if_mtu;
-	if (nh->gw.s_addr)
-		pnh->nh_addr.s_addr = ntohl(nh->gw.s_addr);
-	else
-		pnh->nh_addr.s_addr = ntohl(dest.s_addr);
+	addr_print(nh->gw.s_addr);
+	if (nh->gw.s_addr) {
+		pnh->nh_addr.s_addr = nh->gw.s_addr;
+		printf("in if nh->gw.s_addr\n");
+	} else {
+		pnh->nh_addr.s_addr = dest.s_addr;
+		printf("else if nh->gw.s_addr\n");
+	}
+
+	addr_print(pnh->nh_addr.s_addr);
 
 	dxr_cache_index = index;
 
