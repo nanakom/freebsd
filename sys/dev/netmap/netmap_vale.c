@@ -1688,10 +1688,8 @@ netmap_dxr_lookup(struct nm_bdg_fwd *ft, uint8_t *dst_ring,
 		ip_input(m);
 		dst_ifp = (struct ifnet *)m->m_pkthdr.PH_loc.ptr;
 
-		if ((!dst_ifp) || (m->m_flags & M_CONSUMED)) {
-			RD(3,"packet is consumed");
+		if ((!dst_ifp) || (m->m_flags & M_CONSUMED))
 			return ret;
-		}
 
 		if (!(dst_ifp->if_capenable & IFCAP_NETMAP /* XXX */)) {
 			D("dst_ifp %s is not netmap mode", dst_ifp->if_xname);
@@ -1710,7 +1708,7 @@ netmap_dxr_lookup(struct nm_bdg_fwd *ft, uint8_t *dst_ring,
 		m->m_flags |= M_CONSUMED;
 		ifp->if_input(ifp,m);
 	}
-	
+
 	return ret;
 
 }

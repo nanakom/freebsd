@@ -109,6 +109,7 @@ __FBSDID("$FreeBSD$");
 
 #include <machine/in_cksum.h>
 
+
 static int
 ip_findroute(struct nhop4_basic *pnh, struct in_addr dest, struct mbuf *m)
 {
@@ -293,22 +294,19 @@ passin:
 #ifdef IPSTEALTH
 	}
 #endif
-	printf("start lookup in ip_tryforward\n");
 
 	/*
 	 * Find route to destination.
 	 */
-	if (dxr_input(&nh, dest, m, dnh) != NULL) {
-		printf("dxr_input failed, mbuf will be allocated\n"); //for debug
+	if (dxr_input(&nh, dest, m, &dnh) != NULL) {
 		if ((m->m_flags & M_VALE) && (!(m->m_flags & M_CONSUMED))) {
 			m->m_flags |= M_CONSUMED;
 			m = m_devget(m->m_data, m->m_len, 0, m->m_pkthdr.rcvif, NULL);
 		}
-		if (ip_findroute(&nh, dest, m) != 0) {
-			printf("ip_findroute failed\n"); //for debug
+		if (ip_findroute(&nh, dest, m) != 0)
 			return (NULL);	/* icmp unreach already sent */
-		}
 	}
+
 
 	/*
 	 * Step 5: outgoing firewall packet processing
@@ -353,7 +351,7 @@ forwardlocal:
 			m_tag_delete(m, fwd_tag);
 			m->m_flags &= ~M_IP_NEXTHOP;
 		}
-		if (dxr_input(&nh, dest, m, dnh) != NULL) {
+		if (dxr_input(&nh, dest, m, &dnh) != NULL) {
 			if ((m->m_flags & M_VALE) && (!(m->m_flags & M_CONSUMED))) {
 				m->m_flags |= M_CONSUMED;
 				m = m_devget(m->m_data, m->m_len, 0, m->m_pkthdr.rcvif, NULL);
@@ -367,7 +365,7 @@ passout:
 	/*
 	 * Step 6: send off the packet
 	 */
-
+	
 	/* bypass ethernet_output routine */
 	if ((m->m_flags & M_VALE) && !(DXR_HDR_CACHE_CLEARED(dnh->hdr.ether_dhost))) {
 		hdr = (struct ether_header *)(m->m_data - ETHER_HDR_LEN);

@@ -568,15 +568,14 @@ tooshort:
 	    IPSEC_CAPS(ipv4, m, IPSEC_CAP_OPERABLE) == 0)
 #endif
 	    ) {
-		if ((m = ip_tryforward(m)) == NULL) {
-			printf("ip_tryforward == NULL\n"); //for debug
+		if ((m = ip_tryforward(m)) == NULL)
 			return;
-		}
+
 		if ((m->m_flags & M_VALE) && (!(m->m_flags & M_CONSUMED))) {
 			m->m_flags |= M_CONSUMED;
 			m = m_devget(m->m_data, m->m_len, 0, m->m_pkthdr.rcvif, NULL);
-			printf("packet is consumed in ip_input"); //for debug
 		}
+
 		if (m->m_flags & M_FASTFWD_OURS) {
 			m->m_flags &= ~M_FASTFWD_OURS;
 			ip = mtod(m, struct ip *);

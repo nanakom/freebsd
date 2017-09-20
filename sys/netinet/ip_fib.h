@@ -120,7 +120,7 @@ struct dxr_stats {
 };
 
 
-struct mbuf * dxr_input(struct nhop4_basic *, struct in_addr, struct mbuf *, struct dxr_nexthop *);
+struct mbuf * dxr_input(struct nhop4_basic *, struct in_addr, struct mbuf *, struct dxr_nexthop **);
 void dxr_request(struct rtentry *, int);
 struct dxr_nexthop * get_nexthop_tbl(void);
 

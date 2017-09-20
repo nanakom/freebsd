@@ -247,7 +247,6 @@ static uma_zone_t chunk_zone;
 struct dxr_nexthop *
 get_nexthop_tbl(void)
 {
-	//printf("get_nexthop_tbl nexthop_tbl = %p\n", nexthop_tbl);
 	return nexthop_tbl;
 }
 
@@ -272,18 +271,14 @@ void ethhdr_print(struct ether_header *eh)
 */
 
 struct mbuf *
-dxr_input(struct nhop4_basic *pnh, struct in_addr dest, struct mbuf *m, struct dxr_nexthop *nh)
+dxr_input(struct nhop4_basic *pnh, struct in_addr dest, struct mbuf *m, struct dxr_nexthop **dnh)
 {
 	uint32_t dst;
 	uint8_t index;
-
-	printf("dxr_input start\n");
+	struct dxr_nexthop *nh;
 
 	bzero(pnh, sizeof(*pnh));
-	dst = dest.s_addr;
-
-	printf("destination is ");
-	addr_print(dst);
+	dst = ntohl(dest.s_addr);
 
 	/*
 	 * Find the nexthop.
@@ -292,12 +287,14 @@ dxr_input(struct nhop4_basic *pnh, struct in_addr dest, struct mbuf *m, struct d
 	 */
 	nh = &nexthop_tbl[(index = dxr_lookup(dst))];
 	
+	/*
 	printf("in dxr, index = %d, nexthop_tbl = %p, &nexthop_tbl[index] = %p\n", index, nexthop_tbl, nh);
 	for (int i = 0; i < 10; i++) {
 		printf("in dxr, i = %d, nexthop_tbl[%d].gw = ", i, i); 
 		addr_print(nexthop_tbl[i].gw.s_addr);
 	}
-	//dst_ifp = nh->ifp;
+	*/
+	*dnh = nh;
 	pnh->nh_ifp = nh->ifp;
 	if (pnh->nh_ifp == NULL) {
 		/*
@@ -308,16 +305,10 @@ dxr_input(struct nhop4_basic *pnh, struct in_addr dest, struct mbuf *m, struct d
 		return m;
 	}
 	pnh->nh_mtu = nh->ifp->if_mtu;
-	addr_print(nh->gw.s_addr);
-	if (nh->gw.s_addr) {
+	if (nh->gw.s_addr)
 		pnh->nh_addr.s_addr = nh->gw.s_addr;
-		printf("in if nh->gw.s_addr\n");
-	} else {
+	else 
 		pnh->nh_addr.s_addr = dest.s_addr;
-		printf("else if nh->gw.s_addr\n");
-	}
-
-	addr_print(pnh->nh_addr.s_addr);
 
 	dxr_cache_index = index;
 
